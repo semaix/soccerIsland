@@ -213,7 +213,7 @@ namespace SoccerIsland.Match
                 }
                 t = MatchFactory.FromLineup(e.name, ids, db, State.underground, rng);
                 t.town = e.town;
-                if (e.isPlayer) MatchFactory.InsertProtagonist(t, _career.Player, 11);
+                if (e.isPlayer) MatchFactory.InsertProtagonist(t, _career.Player, 11, db.currentDay);
             }
             else if (e.isPlayer) t = PlayerTeam(rng);
             else if (e.clubId >= 0)
@@ -243,7 +243,7 @@ namespace SoccerIsland.Match
             var ids = new List<int>();
             foreach (var c in _career.Player.contracts) ids.Add(c.npcId);
             var t = MatchFactory.FromLineup(_career.Player.teamName, ids, _career.Population.Database, State.underground, rng);
-            MatchFactory.InsertProtagonist(t, _career.Player, 11);
+            MatchFactory.InsertProtagonist(t, _career.Player, 11, _career.Population.Database.currentDay);
             Fill(t, rng, 45);
             MatchFactory.ApplyPartnerBoost(_career, t);
             return t;

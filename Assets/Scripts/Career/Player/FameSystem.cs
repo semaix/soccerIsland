@@ -17,6 +17,7 @@ namespace SoccerIsland.Career
         TournamentWon,      // 大会優勝
         RomanceRumor,       // デート目撃
         RomanceRevealed,    // 熱愛発覚
+        LoanSharkBusted,    // 闇金摘発
     }
 
     public struct FameEvent

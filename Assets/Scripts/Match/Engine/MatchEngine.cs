@@ -1383,6 +1383,7 @@ namespace SoccerIsland.Match
                 if (d.yellowCards >= 2) SendOff(d, "2枚目のイエローで退場！");
             }
             if (d.isProtagonist) { d.rating -= 0.3f; ChangeTrust(-3f, "ファウル"); }
+            MaybeInjure(d, victim);
 
             // フリーキック
             if (Zone >= 4)
@@ -1391,6 +1392,18 @@ namespace SoccerIsland.Match
                 ResolveShot(victim, null, MatchCommand.Wait, MatchCommand.Shoot, 6f);
             }
             return true;
+        }
+
+        /// <summary>荒いファウルでけがをすることがある。ファイターのタックルは特に危ない。</summary>
+        void MaybeInjure(MatchPlayer fouler, MatchPlayer victim)
+        {
+            if (victim == null || victim.injured) return;
+            float chance = 0.12f + (fouler.soccerPersonality == SoccerPersonality.Fighter ? 0.08f : 0f) + (fouler.role == PlayerRole.Physical ? 0.05f : 0f);
+            if (!_rng.Chance(chance)) return;
+            victim.injured = true;
+            victim.injuryDays = _rng.Range(3, 22);
+            if (Holder == victim) Holder = PickCarrier(TeamOf(Possession), Zone);
+            Emit(MatchEventType.Injury, SideOf(victim), victim, fouler, $"{victim.name}が倒れたまま起き上がれない！ 担架が呼ばれた……（全治{victim.injuryDays}日）", victim.injuryDays, true, null, null);
         }
 
         void SendOff(MatchPlayer p, string text)

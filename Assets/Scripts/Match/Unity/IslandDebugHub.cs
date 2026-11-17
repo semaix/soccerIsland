@@ -297,6 +297,12 @@ namespace SoccerIsland.Match.UnityIntegration
             GUILayout.Label($"チーム {p.teamName}（{p.contracts.Count}人）　人気投票 {(c.Media.playerVoteRank > 0 ? c.Media.playerVoteRank + "位" : "圏外")}");
             GUILayout.Label($"謎のプレーヤーの手がかり {c.Mystery.Clues}/{MysteryPlayerQuest.CluesNeeded}" + (c.Mystery.Found ? "（正体を突き止めた）" : ""));
             if (c.Romance.State.PartnerId >= 0) GUILayout.Label("恋人：" + c.Population.Database.Get(c.Romance.State.PartnerId).FullName);
+            var dbm = c.Population.Database;
+            if (p.IsInjured(dbm.currentDay)) GUILayout.Label($"けが：あと{p.injuredUntilDay - dbm.currentDay + 1}日（試合はベンチから指示だけ）");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("病院に行く（勇心町）")) Say(c.Hospital.TreatProtagonist());
+            if (c.Economy.loans.Exists(l => l.lender == Lender.LoanShark) && GUILayout.Button("交番に闇金を通報する")) Say(c.Police.ReportLoanShark());
+            GUILayout.EndHorizontal();
             if (ReincarnationSystem.CanRetire(p) && GUILayout.Button("引退する（次の人生へ）"))
             {
                 var legacy = CareerManager.Instance.RetireAndStartNextLife();

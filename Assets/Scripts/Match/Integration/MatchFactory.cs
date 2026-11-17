@@ -99,13 +99,20 @@ namespace SoccerIsland.Match
             foreach (var id in ids)
             {
                 var n = db.Get(id);
-                if (n != null) t.players.Add(FromNPC(n, underground, rng));
+                if (n != null && !n.IsInjured(db.currentDay)) t.players.Add(FromNPC(n, underground, rng)); // けが人は出られない
             }
             EnsureKeeper(t);
             return t;
         }
 
         /// <summary>主人公をチームに入れる。11人いれば同じポジションで一番弱い選手と交代。</summary>
+        /// <summary>主人公をチームに入れる。けが中なら試合には出られず、ベンチから指示だけ出す。</summary>
+        public static void InsertProtagonist(MatchTeam t, PlayerState s, int teamSize, int today)
+        {
+            InsertProtagonist(t, s, teamSize);
+            if (s.IsInjured(today)) { var pro = t.Protagonist; if (pro != null) pro.injured = true; }
+        }
+
         public static void InsertProtagonist(MatchTeam t, PlayerState s, int teamSize)
         {
             var pro = FromProtagonist(s);
@@ -172,8 +179,8 @@ namespace SoccerIsland.Match
                 if (m.homeClubId == career.Player.teamClubId) protagonistSide = Side.Home;
                 else if (m.awayClubId == career.Player.teamClubId) protagonistSide = Side.Away;
             }
-            if (protagonistSide == Side.Home) InsertProtagonist(home, career.Player, size);
-            if (protagonistSide == Side.Away) InsertProtagonist(away, career.Player, size);
+            if (protagonistSide == Side.Home) InsertProtagonist(home, career.Player, size, db.currentDay);
+            if (protagonistSide == Side.Away) InsertProtagonist(away, career.Player, size, db.currentDay);
             if (protagonistSide.HasValue) ApplyPartnerBoost(career, protagonistSide == Side.Home ? home : away);
 
             return new MatchSetup

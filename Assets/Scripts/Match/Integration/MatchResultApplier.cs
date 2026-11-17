@@ -1,3 +1,4 @@
+using System;
 using SoccerIsland.Career;
 using SoccerIsland.NPC;
 using SoccerIsland.World;
@@ -40,6 +41,16 @@ namespace SoccerIsland.Match
                     if (m != null) result.learnedSpecials.Add(m);
                 }
             }
+
+            // けが：島民も主人公も、治るまで試合に出られない
+            int today = db.currentDay;
+            foreach (var team in new[] { setup.home, setup.away })
+                foreach (var p in team.players)
+                {
+                    if (!p.injured || p.injuryDays <= 0) continue;
+                    if (p.isProtagonist) career.Player.injuredUntilDay = Math.Max(career.Player.injuredUntilDay, today + p.injuryDays);
+                    else { var n = db.Get(p.npcId); if (n != null) n.injuredUntilDay = Math.Max(n.injuredUntilDay, today + p.injuryDays); }
+                }
 
             // 地域対抗：街の評判
             if (result.protagonistSide.HasValue && setup.home.town >= 0 && setup.away.town >= 0)

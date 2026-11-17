@@ -116,6 +116,9 @@ namespace SoccerIsland.Match
         public bool sentOff;
         /// <summary>足がつった（ボールに関われない）。</summary>
         public bool cramped;
+        /// <summary>この試合でけがをした（ボールに関われない）。けがの日数は injuryDays。</summary>
+        public bool injured;
+        public int injuryDays;
 
         /// <summary>今この選手が求めている指示（性格で変わる）。</summary>
         public CoachingCommand? demand;
@@ -140,7 +143,7 @@ namespace SoccerIsland.Match
         public float rating = 6f;
 
         public bool CanPlay => !sentOff;
-        public bool CanTouchBall => !sentOff && !cramped;
+        public bool CanTouchBall => !sentOff && !cramped && !injured;
 
         public float GutsRatio => maxGuts <= 0 ? 0f : (float)guts / maxGuts;
 
@@ -249,6 +252,7 @@ namespace SoccerIsland.Match
         Cramp,
         Suspicion,
         Disobey,       // 指示を無視した
+        Injury,        // けが
         Centering, Header, Volley, Clear, Catch, Punch,
         Info,
     }

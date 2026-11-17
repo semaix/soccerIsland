@@ -127,6 +127,9 @@ namespace SoccerIsland.NPC
         public bool isIncarcerated;
         /// <summary>出所予定の年（服役中のみ）。</summary>
         public int releaseYear;
+        /// <summary>けがで試合に出られない最後の日（この日まで出られない）。-1 はけがなし。</summary>
+        public int injuredUntilDay = -1;
+        public bool IsInjured(int day) => injuredUntilDay >= day;
         /// <summary>漂流者で島から出られないか。</summary>
         public bool isStranded;
 

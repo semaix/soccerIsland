@@ -226,6 +226,10 @@ namespace SoccerIsland.Career
                         title = $"熱愛発覚！ {_player.name}のお相手は{n.FullName}", body = $"{NPCLabels.Of(n.hometown)}の{NPCLabels.Of(n.occupation)}。島中に衝撃が走った。" });
                     _market.AddHype(n, 0.1f, "romance");
                     break;
+                case FameEventType.LoanSharkBusted:
+                    a.Add(new Article { category = ArticleCategory.Island, priority = 70,
+                        title = "島の闇金、ついに摘発", body = "勇気ある島民の通報で、警察が動いた。裏社会では「誰がチクった」と犯人探しが始まっているという。" });
+                    break;
                 case FameEventType.TournamentWon:
                     a.Add(new Article { category = ArticleCategory.Player, priority = 98, aboutPlayer = true,
                         title = $"{_player.teamName}、{e.text}で優勝！", body = $"{_player.name}率いる移住者チームが頂点に立った。島中が祝福ムードに。" });

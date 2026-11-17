@@ -99,6 +99,9 @@ namespace SoccerIsland.Career
         /// <summary>次の試合で効く効果（アイテムを使うとたまる。試合が終わると消える）。</summary>
         public List<MatchBuff> matchBuffs = new List<MatchBuff>();
         public int lastRejuvenateDay = -1000;
+        /// <summary>けがで試合に出られない最後の日。-1 はけがなし。</summary>
+        public int injuredUntilDay = -1;
+        public bool IsInjured(int day) => injuredUntilDay >= day;
         /// <summary>飾った記念品（一度だけ知名度が上がる）。</summary>
         public List<string> displayed = new List<string>();
 

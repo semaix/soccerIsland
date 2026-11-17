@@ -177,7 +177,7 @@ namespace SoccerIsland.World
             var scored = new List<KeyValuePair<NPCData, float>>();
             foreach (var n in members)
             {
-                if (busy.Contains(n.id) || n.age < 12 || n.age > 72) continue;
+                if (busy.Contains(n.id) || n.age < 12 || n.age > 72 || n.IsInjured(_db.currentDay)) continue;
                 if (n.isIncarcerated != (category == MatchCategory.PrisonLeague)) continue;
                 // 監督の目は節穴：表の実力＋気分で選ぶ。裏の試合では本気の実力で選ばれる
                 float strength = category == MatchCategory.UndergroundFutsal ? n.Overall : n.PublicOverall;
