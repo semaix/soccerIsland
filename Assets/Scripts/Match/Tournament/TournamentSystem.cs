@@ -11,6 +11,8 @@ namespace SoccerIsland.Match
         GodCup,                 // サッカーの神様を目指す大会
         UndergroundTournament,  // 裏トーナメント
         RegionalCup,            // 地域対抗カップ
+        SummitCup,              // 島の頂上決戦（2周目〜。決勝は仮面のチーム）
+        ReincarnationFinal,     // 転生の謎を解く最終決戦（3周目〜。島のボス）
     }
 
     [Serializable]
@@ -125,6 +127,30 @@ namespace SoccerIsland.Match
             foreach (Town t in Enum.GetValues(typeof(Town)))
                 st.entries.Add(new TournamentEntry { name = NPCLabels.Of(t) + "選抜", town = (int)t, isPlayer = t == career.Player.homeTown });
             Seed(st, godTeamLast: false);
+            return new TournamentSystem(career, st);
+        }
+
+        /// <summary>島の頂上決戦（2周目以降）。決勝で正体不明の「仮面のチーム」と当たる。</summary>
+        public static TournamentSystem CreateSummitCup(IslandCareer career)
+        {
+            if (career.Player.cycle < 2 || career.PreviousLife == null) return null;
+            var st = new TournamentState { name = "島の頂上決戦", kind = TournamentKind.SummitCup, prize = 30000000, famePrize = 20f, seed = career.Population.Database.currentDay * 211 + 5 };
+            st.entries.Add(new TournamentEntry { name = career.Player.teamName, isPlayer = true });
+            foreach (var club in StrongestClubs(career, 1, false)) st.entries.Add(new TournamentEntry { name = club.name, clubId = club.id });
+            st.entries.Add(new TournamentEntry { name = BossTeams.Name(BossKind.Gifted), boss = BossKind.Gifted });
+            st.entries.Add(new TournamentEntry { name = BossTeams.Name(BossKind.PastSelf), boss = BossKind.PastSelf });
+            Seed(st, godTeamLast: true);
+            return new TournamentSystem(career, st);
+        }
+
+        /// <summary>転生の謎を解く最終決戦（3周目以降）。島のボスとの一騎打ち。</summary>
+        public static TournamentSystem CreateReincarnationFinal(IslandCareer career)
+        {
+            if (career.Player.cycle < 3) return null;
+            var st = new TournamentState { name = "転生の謎を解く最終決戦", kind = TournamentKind.ReincarnationFinal, prize = 0, famePrize = 30f, seed = career.Population.Database.currentDay * 3 + 11 };
+            st.entries.Add(new TournamentEntry { name = career.Player.teamName, isPlayer = true });
+            st.entries.Add(new TournamentEntry { name = BossTeams.Name(BossKind.IslandMaster), boss = BossKind.IslandMaster });
+            Seed(st, godTeamLast: true);
             return new TournamentSystem(career, st);
         }
 

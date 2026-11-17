@@ -12,6 +12,9 @@ namespace SoccerIsland.Career
         public EconomyState economy;
         public MediaState media;
         public PhoneState phone;
+        /// <summary>前世の記録（古い順）。</summary>
+        public List<LegacyRecord> legacies = new List<LegacyRecord>();
+        public RomanceState romance;
     }
 
     public class CareerDayReport
@@ -43,6 +46,9 @@ namespace SoccerIsland.Career
         public PlayerState Player { get; }
         public EconomyState Economy { get; }
         public MediaState Media { get; }
+        /// <summary>前世の記録（古い順）。1周目は空。</summary>
+        public List<LegacyRecord> PastLives { get; }
+        public LegacyRecord PreviousLife => PastLives.Count > 0 ? PastLives[PastLives.Count - 1] : null;
 
         public ScoutingSystem Scouting { get; }
         public BankSystem Bank { get; }
@@ -55,6 +61,7 @@ namespace SoccerIsland.Career
         public TrainingSystem Training { get; }
         public AbilityExam Exam { get; }
         public PhoneSystem Phone { get; }
+        public RomanceSystem Romance { get; }
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -66,6 +73,8 @@ namespace SoccerIsland.Career
             Player = save?.player ?? new PlayerState();
             Economy = save?.economy ?? new EconomyState();
             Media = save?.media ?? new MediaState();
+            PastLives = save?.legacies ?? new List<LegacyRecord>();
+            bool isNew = save == null || save.economy == null;
 
             var db = world.Population.Database;
             var rng = world.Population.Random;
@@ -82,8 +91,9 @@ namespace SoccerIsland.Career
             Training = new TrainingSystem(Player, db, world.Population.Knowledge, rng);
             Exam = new AbilityExam(Player, db, Fame, rng);
             Phone = new PhoneSystem(Player, world.Population, world.State, Economy, save?.phone ?? new PhoneState(), rng);
+            Romance = new RomanceSystem(Player, world.Population, world.State, save?.romance ?? new RomanceState(), _fameEvents, rng);
 
-            if (save == null)
+            if (isNew)
             {
                 Stocks.ListInitialStocks();
                 Player.marketValue = FameSystem.CalculateMarketValue(Player);
@@ -131,6 +141,7 @@ namespace SoccerIsland.Career
         {
             Fame.TickDay();
             Training.TickDay();
+            if (Population.Database.currentDay % 365 == 0) Player.age++;
             var report = new CareerDayReport
             {
                 world = _pendingWorld,
@@ -156,6 +167,6 @@ namespace SoccerIsland.Career
             return AfterDayAdvance(p);
         }
 
-        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media, phone = Phone.State };
+        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media, phone = Phone.State, legacies = PastLives, romance = Romance.State };
     }
 }

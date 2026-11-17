@@ -151,6 +151,7 @@ namespace SoccerIsland.Match
             }
             if (protagonistSide == Side.Home) InsertProtagonist(home, career.Player, size);
             if (protagonistSide == Side.Away) InsertProtagonist(away, career.Player, size);
+            if (protagonistSide.HasValue) ApplyPartnerBoost(career, protagonistSide == Side.Home ? home : away);
 
             return new MatchSetup
             {
@@ -158,6 +159,18 @@ namespace SoccerIsland.Match
                 protagonistSide = protagonistSide, seed = rng.Range(1, int.MaxValue), underground = underground,
                 crowd = Crowd(m.category, career.Player.fame), worldMatchId = m.id,
             };
+        }
+
+        /// <summary>恋人と同じチームだと、主人公も恋人も燃える。</summary>
+        public static void ApplyPartnerBoost(IslandCareer career, MatchTeam team)
+        {
+            int partner = career.Romance.State.PartnerId;
+            if (partner < 0) return;
+            var p = team.players.Find(x => x.npcId == partner);
+            if (p == null) return;
+            p.tension = Math.Min(100f, p.tension + 15f);
+            var pro = team.Protagonist;
+            if (pro != null) pro.tension = Math.Min(100f, pro.tension + 15f);
         }
 
         /// <summary>電話で誘われた試合に助っ人として出る。</summary>

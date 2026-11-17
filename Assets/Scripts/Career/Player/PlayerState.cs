@@ -34,6 +34,12 @@ namespace SoccerIsland.Career
     {
         public string name = "主人公";
         public Town homeTown = Town.Furugane;
+        /// <summary>年齢。1年ごとに上がる。</summary>
+        public int age = 26;
+        /// <summary>人生何周目か（本人は気づいていない）。</summary>
+        public int cycle = 1;
+        /// <summary>前世の記憶で「なぜか知っている」島民（化ける選手）。</summary>
+        public List<int> dejaVu = new List<int>();
 
         // ---- お金 ----
         public long cash = 3000000;

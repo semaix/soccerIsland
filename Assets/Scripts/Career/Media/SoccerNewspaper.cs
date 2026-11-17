@@ -198,6 +198,18 @@ namespace SoccerIsland.Career
                     a.Add(new Article { category = ArticleCategory.Gossip, priority = 35, aboutPlayer = true, npcIds = { n.id },
                         title = $"{_player.name}、ファンに塩対応!?", body = $"{NPCLabels.Of(n.hometown)}の{NPCLabels.Of(n.occupation)}が「サインを断られた」と証言。" });
                     break;
+                case FameEventType.RomanceRumor:
+                    if (n == null) break;
+                    a.Add(new Article { category = ArticleCategory.Gossip, priority = 45, aboutPlayer = true, npcIds = { n.id },
+                        title = $"{_player.name}、{e.text}で{NPCLabels.Of(n.occupation)}と2人きり!?", body = "親しげに話す姿が目撃された。関係者は「ただの友人」と否定。" });
+                    _market.AddHype(n, 0.04f, "romance_rumor");
+                    break;
+                case FameEventType.RomanceRevealed:
+                    if (n == null) break;
+                    a.Add(new Article { category = ArticleCategory.Gossip, priority = 80, aboutPlayer = true, npcIds = { n.id },
+                        title = $"熱愛発覚！ {_player.name}のお相手は{n.FullName}", body = $"{NPCLabels.Of(n.hometown)}の{NPCLabels.Of(n.occupation)}。島中に衝撃が走った。" });
+                    _market.AddHype(n, 0.1f, "romance");
+                    break;
                 case FameEventType.TournamentWon:
                     a.Add(new Article { category = ArticleCategory.Player, priority = 98, aboutPlayer = true,
                         title = $"{_player.teamName}、{e.text}で優勝！", body = $"{_player.name}率いる移住者チームが頂点に立った。島中が祝福ムードに。" });

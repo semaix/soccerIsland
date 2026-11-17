@@ -15,6 +15,8 @@ namespace SoccerIsland.Career
         FameMilestone,     // 知名度の節目
         MatchFixingExposed, // 八百長がばれた
         TournamentWon,      // 大会優勝
+        RomanceRumor,       // デート目撃
+        RomanceRevealed,    // 熱愛発覚
     }
 
     public struct FameEvent
