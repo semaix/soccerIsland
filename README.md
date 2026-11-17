@@ -96,6 +96,37 @@ var today = world.TodaysMatches();                 // 今日の試合（観戦�
 var item  = world.State.GetItem(id).SurfaceStatus; // 表のお店で見た状態
 ```
 
+## 実装済み：スカウト・お金・知名度・新聞（`Assets/Scripts/Career`）
+
+**スカウト** — 獲得には市場価値を払う（エゴイスト1.2倍・献身的0.9倍・ゴッド1.5倍・協会未登録1.5倍）。
+話したことがない／好感度不足／服役中／15歳未満は獲得できない。裏の人間は「裏の顔」を教えてもらい裏市場に入れないと獲得できない。
+給料は30日ごと（年俸の1/12）。2か月払えないと退団して元のクラブに戻る。
+
+**銀行** — 預金（利息あり）、借入（信用スコアと主人公の市場価値で枠が決まる。年利3〜15%）。延滞すると信用が落ちて借りられなくなる。
+**闇金**（裏市場） — トイチ（10日で1割）。延滞すると 嫌がらせ → **八百長の要求** → 差し押さえ。`ForgiveHalfForFix` で八百長イベントと連動。
+**株** — チーム株（試合結果・所属選手の話題性）と商店株（売れ行き・完売）。
+**toto / 裏toto** — オッズは「表で見えている実力」から計算。裏で本気を出す選手を知っていれば裏totoで勝てる。刑務所リーグは対象外。
+**宝くじ** — 1枚300円、毎週日曜抽選。6桁一致1億円〜下1桁300円。
+
+**知名度** — 試合の活躍（地域対抗2倍・島代表3倍、裏の試合はほぼ0）、ゴールパフォーマンス（派手さ×新鮮さ）、ファン対応で上下。試合に出ないと忘れられる。主人公の市場価値は知名度で決まる。
+**ファン** — 有名になると島民がサイン・写真・握手を求めてくる（性格・年齢で頻度が違う）。サインは自作が必要。断ると「塩対応」記事になることも。
+**自作サイン** — 0〜1座標の線データ（`SignatureDesign`）。`SignatureTexture.Render` で Texture2D に描ける。
+**ゴールパフォーマンス** — 15種類の動きを最大6個組み合わせる。ユニフォーム脱ぎはイエロー、挑発系はゴシップになる。
+
+**サッカー新聞（毎朝）** — 試合結果、移籍、市場価値の急変、覚醒・出所、お店の完売、株の急騰、宝くじ当選番号、主人公の話題、有名人のゴシップ（不仲説・密会など。載った人の市場価値が動く）、毎週の協会ランキング、毎月の人気投票。裏フットサル・刑務所リーグは表の新聞に載らない。
+
+使い方：`NPCManager`・`WorldManager` と同じシーンに `CareerManager` を置く。
+
+```csharp
+var career = CareerManager.Instance.Career;
+var r = career.Interact(npcId);                       // 会話＋ファンのお願い（r.fanRequest）
+career.Scouting.Scout(npcId);                         // ScoutResult が返る
+career.Bank.Borrow(Lender.Bank, 5000000, 180);
+career.Betting.PlaceBet(matchId, TotoPick.Home, 10000);
+career.Fame.RecordMatch(MatchCategory.Kusa, 8.0f, goals: 1, assists: 1, beautifulSkills: 2);
+CareerManager.Instance.OnNewspaper += issue => ShowPaper(issue);
+```
+
 ### 個人情報の方針
 
 - 端末（スマホ）内の個人情報は使わない：連絡先・電話番号・位置情報・カメラ・マイク・端末ID・端末名・広告ID・クリップボードを読まない。

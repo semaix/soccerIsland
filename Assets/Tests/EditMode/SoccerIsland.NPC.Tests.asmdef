@@ -4,6 +4,7 @@
     "references": [
         "SoccerIsland.NPC",
         "SoccerIsland.World",
+        "SoccerIsland.Career",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
