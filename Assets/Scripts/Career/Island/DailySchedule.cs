@@ -89,6 +89,44 @@ namespace SoccerIsland.Career
             }
         }
 
+        /// <summary>島民が今いる街と場所。職場は職業で街が決まる（オフィス街は天峰台、病院は勇心町…）。</summary>
+        public IslandLocation Locate(NPCData n, int day, TimeOfDay t, int blackMarketTown = -1)
+        {
+            var place = WhereIs(n, day, t);
+            Town town = n.hometown;
+            switch (place)
+            {
+                case IslandPlace.Bar: town = Town.Kirahama; break;
+                case IslandPlace.Hospital: town = Town.Yushin; break;
+                case IslandPlace.Prison: town = Town.Furugane; break;
+                case IslandPlace.BlackMarket: if (blackMarketTown >= 0) town = (Town)blackMarketTown; break;
+                case IslandPlace.ClubGround:
+                    var club = _db.GetClub(n.clubId);
+                    if (club != null) town = club.town;
+                    break;
+                case IslandPlace.Workplace: town = WorkTown(n); break;
+            }
+            return new IslandLocation(town, place);
+        }
+
+        public static Town WorkTown(NPCData n)
+        {
+            switch (n.occupation)
+            {
+                case Occupation.Doctor:
+                case Occupation.Nurse:
+                case Occupation.Firefighter: return Town.Yushin;
+                case Occupation.Salaryman:
+                case Occupation.Banker:
+                case Occupation.Reporter: return Town.Tenpou;
+                case Occupation.Idol:
+                case Occupation.Lifeguard:
+                case Occupation.Bartender: return Town.Kirahama;
+                case Occupation.Mafia: return Town.Furugane;
+                default: return n.hometown;
+            }
+        }
+
         /// <summary>その場所の具体的な名前（職場は職業で変わる）。</summary>
         public static string PlaceName(NPCData n, IslandPlace p)
         {

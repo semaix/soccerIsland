@@ -97,20 +97,28 @@ namespace SoccerIsland.Match.UnityIntegration
         void DrawIslanders(IslandCareer c)
         {
             var db = c.Population.Database;
+            GUILayout.Label($"今いる場所：{c.Here}（{DailySchedule.Label(c.Now)}）");
+            DrawMove(c);
+
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.Width(Screen.width * 0.4f));
+            _scroll2 = GUILayout.BeginScrollView(_scroll2, GUILayout.Height(Screen.height * 0.45f));
+            GUILayout.Label("── ここにいる人 ──");
+            foreach (var n in c.PeopleHere().Take(60))
+            {
+                var e = c.Population.Knowledge.Get(n.id);
+                string name = e != null && e.Knows(NPCInfoFlags.Name) ? n.FullName : $"見知らぬ人（{NPCLabels.Of(n.occupation)}の格好）";
+                if (GUILayout.Button(name + (c.Player.dejaVu.Contains(n.id) ? "　（なぜか気になる）" : ""))) _selected = n.id;
+            }
+            GUILayout.Label("── 知り合い ──");
             _search = GUILayout.TextField(_search);
-            _scroll2 = GUILayout.BeginScrollView(_scroll2, GUILayout.Height(Screen.height * 0.55f));
             foreach (var e in c.Population.Knowledge.entries.Take(300))
             {
                 var n = db.Get(e.npcId);
-                if (n == null || (_search.Length > 0 && !n.FullName.Contains(_search))) continue;
-                string name = e.Knows(NPCInfoFlags.Name) ? n.FullName : "？？？";
-                if (GUILayout.Button($"{name}　好感度{e.affinity}" + (c.Player.dejaVu.Contains(n.id) ? "　（なぜか気になる）" : ""))) _selected = n.id;
+                if (n == null || !e.Knows(NPCInfoFlags.Name) || (_search.Length > 0 && !n.FullName.Contains(_search))) continue;
+                var loc = c.Locate(n.id);
+                if (GUILayout.Button($"{n.FullName}　好感度{e.affinity}　今は{DailySchedule.PlaceName(n, loc.place)}")) _selected = n.id;
             }
-            GUILayout.Label("── 近くにいる人 ──");
-            foreach (var n in db.GetByTown(c.Player.homeTown).Take(40))
-                if (c.Population.Knowledge.Get(n.id) == null && GUILayout.Button("見知らぬ人（" + NPCLabels.Of(n.occupation) + "の格好）")) _selected = n.id;
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
@@ -119,6 +127,28 @@ namespace SoccerIsland.Match.UnityIntegration
             if (sel != null) DrawProfile(c, sel);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
+        }
+
+        void DrawMove(IslandCareer c)
+        {
+            foreach (Town t in Enum.GetValues(typeof(Town)))
+            {
+                GUILayout.BeginHorizontal();
+                int cost = IslandMap.Distance(c.Here.town, t);
+                GUILayout.Label($"{NPCLabels.Of(t)}（{(cost == 0 ? "ここ" : cost + "時間帯")}）", GUILayout.Width(150));
+                foreach (var place in IslandMap.PlacesIn(t, c.Player.homeTown))
+                    if (GUILayout.Button(IslandMap.PlaceLabel(place))) Moved(c.MoveTo(t, place));
+                if (c.BlackMarket.KnowsLocation && c.Player.blackMarketAccess && c.BlackMarket.CurrentTown == t && GUILayout.Button("裏市場"))
+                    Moved(c.MoveTo(t, IslandPlace.BlackMarket));
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        void Moved(List<CareerDayReport> reports)
+        {
+            if (reports == null) { Say("そこには行けない"); return; }
+            foreach (var r in reports) Capture(r);
+            _selected = -1;
         }
 
         void DrawProfile(IslandCareer c, NPCData n)
@@ -133,9 +163,10 @@ namespace SoccerIsland.Match.UnityIntegration
             foreach (var note in p.notes) GUILayout.Label("※ " + note);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("話す"))
+            if (GUILayout.Button(c.IsHere(n.id) || !c.requirePresence ? "話す" : "（ここにはいない）"))
             {
                 var r = c.Interact(n.id);
+                if (r.notHere) { Say("その人はここにいない"); GUILayout.EndHorizontal(); return; }
                 foreach (var l in r.conversation.lines) Say($"{p.name}「{l}」");
                 if (r.fanRequest != null)
                 {

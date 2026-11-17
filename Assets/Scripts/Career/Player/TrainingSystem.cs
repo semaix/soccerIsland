@@ -42,6 +42,9 @@ namespace SoccerIsland.Career
         public float fatiguePerSession = 20f;
         public float recoveryPerDay = 30f;
         public float baseGain = 0.6f;
+        /// <summary>場所の制限：主人公がグラウンドにいるか／その島民が同じ場所にいるか（IslandCareer が差し込む）。</summary>
+        public Func<bool> atGround;
+        public Func<int, bool> isHere;
 
         readonly PlayerState _player;
         readonly NPCDatabase _db;
@@ -94,6 +97,8 @@ namespace SoccerIsland.Career
             if (_player.lastTrainingDay != day) { _player.lastTrainingDay = day; _player.trainingsToday = 0; }
             if (_player.trainingsToday >= maxPerDay) { r.refusal = "今日はもう練習できない"; return r; }
             if (_player.fatigue >= 90f) { r.refusal = "疲れすぎて体が動かない……"; return r; }
+            if (atGround != null && !atGround()) { r.refusal = "練習はグラウンドで"; return r; }
+            if (partnerId >= 0 && isHere != null && !isHere(partnerId)) { r.refusal = "その人は今グラウンドにいない"; return r; }
 
             while (_player.statProgress.Count < NPCAbilities.StatCount) _player.statProgress.Add(0f);
             NPCData partner = partnerId >= 0 ? _db.Get(partnerId) : null;

@@ -8,8 +8,9 @@ namespace SoccerIsland.NPC.Tests
 {
     public class IslandEventTests
     {
+        // このファイルは各システムの動きを見るので、場所の制限（同じ場所にいる人としか話せない等）は外す
         static IslandCareer NewCareer() =>
-            new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault())));
+            new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault()))) { requirePresence = false };
 
         static void Befriend(IslandCareer c, NPCData n, int affinity)
         {

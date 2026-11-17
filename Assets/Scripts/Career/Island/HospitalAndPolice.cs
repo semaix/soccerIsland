@@ -9,6 +9,8 @@ namespace SoccerIsland.Career
     public class Hospital
     {
         public long fee = 30000;
+        /// <summary>主人公が病院にいるか（場所の制限を使うとき IslandCareer が差し込む）。</summary>
+        public Func<bool> atHospital;
 
         readonly PlayerState _player;
         readonly IslandPopulation _pop;
@@ -34,6 +36,7 @@ namespace SoccerIsland.Career
         public string TreatProtagonist()
         {
             int day = _pop.Database.currentDay;
+            if (atHospital != null && !atHospital()) return "病院（勇心町）まで行かないと";
             if (!_player.IsInjured(day)) return "どこも悪くない";
             if (!Pay()) return "お金が足りない";
             int left = _player.injuredUntilDay - day;
@@ -46,6 +49,7 @@ namespace SoccerIsland.Career
         {
             int day = _pop.Database.currentDay;
             var n = _pop.Database.Get(npcId);
+            if (atHospital != null && !atHospital()) return "病院（勇心町）まで連れていかないと";
             if (n == null || !n.IsInjured(day)) return "けがはしていない";
             if (!Pay()) return "お金が足りない";
             int left = n.injuredUntilDay - day;

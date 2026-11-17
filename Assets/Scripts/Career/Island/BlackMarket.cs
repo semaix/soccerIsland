@@ -34,7 +34,15 @@ namespace SoccerIsland.Career
 
         int Period => _pop.Database.currentDay / PeriodDays;
 
-        public string CurrentLocation => Locations[(Period + _pop.Database.seed % Locations.Length + Locations.Length) % Locations.Length];
+        int LocationIndex => (Period + _pop.Database.seed % Locations.Length + Locations.Length) % Locations.Length;
+
+        public string CurrentLocation => Locations[LocationIndex];
+
+        /// <summary>今の開催場所がある街。</summary>
+        public Town CurrentTown => IslandMap.BlackMarketTowns[LocationIndex];
+
+        /// <summary>主人公がその場にいるか（場所の制限を使うとき IslandCareer が差し込む）。</summary>
+        public Func<bool> playerIsThere;
 
         public bool KnowsLocation => _state.knownBlackMarketPeriod == Period;
 
@@ -44,7 +52,7 @@ namespace SoccerIsland.Career
         public bool OpenNow => !nightOnly || _player.timeOfDay == (int)TimeOfDay.Night;
 
         /// <summary>入れるか（裏市場の存在を知っていて、今の場所も知っていて、開いている）。</summary>
-        public bool CanEnter => _player.blackMarketAccess && KnowsLocation && OpenNow;
+        public bool CanEnter => _player.blackMarketAccess && KnowsLocation && OpenNow && (playerIsThere == null || playerIsThere());
 
         public void LearnLocation() => _state.knownBlackMarketPeriod = Period;
 

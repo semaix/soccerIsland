@@ -66,6 +66,7 @@ namespace SoccerIsland.Career
                 cycle = legacy.cycle + 1,
                 homeTown = NextTown(legacy.homeTown),
             };
+            player.currentTown = player.homeTown;
             var lives = new List<LegacyRecord>();
             if (pastLives != null) lives.AddRange(pastLives);
             lives.Add(legacy);

@@ -10,7 +10,8 @@ namespace SoccerIsland.NPC.Tests
     {
         static IslandCareer NewCareer()
         {
-            var c = new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault())));
+            // 各アイテムの効果を見るので、場所の制限は外す
+            var c = new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault()))) { requirePresence = false };
             c.Player.cash = 100000000;
             return c;
         }

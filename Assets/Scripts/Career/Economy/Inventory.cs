@@ -111,6 +111,9 @@ namespace SoccerIsland.Career
             _today = today;
         }
 
+        /// <summary>主人公がその街にいるか（場所の制限を使うとき IslandCareer が差し込む）。</summary>
+        public Func<Town, bool> playerInTown;
+
         public int Count(string name)
         {
             foreach (var i in _player.inventory) if (i.name == name) return i.count;
@@ -141,6 +144,7 @@ namespace SoccerIsland.Career
         {
             var item = _world.GetItem(itemId);
             if (item == null || item.isUnderground || item.SurfaceStatus != ItemStatus.OnSale || item.stock <= 0) return false;
+            if (playerInTown != null && !playerInTown(item.town)) return false; // そのお店の街まで行かないと買えない
             if (!_player.TrySpend(item.price, "買い物: " + item.name, _today())) return false;
             item.stock--;
             if (item.stock <= 0) { item.status = ItemStatus.SoldOut; item.buyerId = -1; }

@@ -35,6 +35,8 @@ namespace SoccerIsland.Career
         public ConversationResult conversation;
         /// <summary>サイン・写真・握手のお願い（なければ null）。</summary>
         public FanRequest fanRequest;
+        /// <summary>その人はここにいなかった（会話していない）。</summary>
+        public bool notHere;
     }
 
     /// <summary>
@@ -73,6 +75,12 @@ namespace SoccerIsland.Career
         public PoliceBox Police { get; }
         public DailySchedule Schedule { get; }
         public TimeOfDay Now => (TimeOfDay)Player.timeOfDay;
+        /// <summary>
+        /// true（既定）：同じ街の同じ場所にいる島民にしか話しかけられない。お店はその街の街なか、
+        /// 練習はグラウンド、病院は勇心病院、裏市場は開催場所に行く必要がある。電話はどこからでもかけられる。
+        /// </summary>
+        public bool requirePresence = true;
+        public IslandLocation Here => new IslandLocation(Player.currentTown, (IslandPlace)Player.currentPlace);
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -126,13 +134,22 @@ namespace SoccerIsland.Career
                 Stocks.ListInitialStocks();
                 Player.marketValue = FameSystem.CalculateMarketValue(Player);
             }
+            // 場所の制限（requirePresence）
+            if (isNew) { Player.currentTown = Player.homeTown; Player.currentPlace = (int)IslandPlace.Home; }
+            BlackMarket.playerIsThere = () => !requirePresence || (Here.place == IslandPlace.BlackMarket && Here.town == BlackMarket.CurrentTown);
+            Inventory.playerInTown = t => !requirePresence || (Here.town == t && Here.place == IslandPlace.Workplace);
+            Training.atGround = () => !requirePresence || Here.place == IslandPlace.ClubGround;
+            Training.isHere = id => !requirePresence || IsHere(id);
+            Hospital.atHospital = () => !requirePresence || Here.place == IslandPlace.Hospital;
             RefreshBlackMarketAccess();
         }
 
-        /// <summary>話しかける。会話に加えて、有名ならファンのお願いが来ることがある。</summary>
+        /// <summary>話しかける。会話に加えて、有名ならファンのお願いが来ることがある。その場にいない人には話しかけられない。</summary>
         public Interaction Interact(int npcId)
         {
             var npc = Population.Database.Get(npcId);
+            if (npc == null) return new Interaction { notHere = true };
+            if (requirePresence && !IsHere(npcId)) return new Interaction { notHere = true };
             var result = new Interaction { conversation = Population.Talk(npcId) };
             if (npc != null) result.fanRequest = Fans.Roll(npc);
             RefreshBlackMarketAccess();
@@ -206,14 +223,54 @@ namespace SoccerIsland.Career
         {
             if (Player.timeOfDay < (int)TimeOfDay.Night) { Player.timeOfDay++; return null; }
             Player.timeOfDay = (int)TimeOfDay.Morning;
-            return AdvanceDay();
+            var report = AdvanceDay();
+            // 朝は家で目を覚ます
+            Player.currentTown = Player.homeTown;
+            Player.currentPlace = (int)IslandPlace.Home;
+            return report;
         }
 
         /// <summary>その島民が今どこにいるか。</summary>
-        public IslandPlace WhereIs(int npcId)
+        public IslandPlace WhereIs(int npcId) => Locate(npcId).place;
+
+        public IslandLocation Locate(int npcId)
         {
             var n = Population.Database.Get(npcId);
-            return n == null ? IslandPlace.Home : Schedule.WhereIs(n, Population.Database.currentDay, Now);
+            if (n == null) return new IslandLocation(Player.homeTown, IslandPlace.Home);
+            return Schedule.Locate(n, Population.Database.currentDay, Now, (int)BlackMarket.CurrentTown);
+        }
+
+        public bool IsHere(int npcId) => Locate(npcId).Same(Here);
+
+        /// <summary>今いる場所にいる島民。</summary>
+        public List<NPCData> PeopleHere()
+        {
+            var list = new List<NPCData>();
+            int day = Population.Database.currentDay;
+            var here = Here;
+            foreach (var n in Population.Database.npcs)
+                if (Schedule.Locate(n, day, Now, (int)BlackMarket.CurrentTown).Same(here)) list.Add(n);
+            return list;
+        }
+
+        /// <summary>
+        /// 移動する。街の中は時間がかからない。隣の街は1時間帯、反対側は2時間帯かかる（深夜を越えると日付が変わる）。
+        /// 日付が変わったときの報告を返す。行けない場所なら null（移動しない）。
+        /// </summary>
+        public List<CareerDayReport> MoveTo(Town town, IslandPlace place)
+        {
+            if (!IslandMap.Exists(town, place, Player.homeTown)) return null;
+            if (place == IslandPlace.BlackMarket && (!Player.blackMarketAccess || !BlackMarket.KnowsLocation || BlackMarket.CurrentTown != town)) return null;
+            var reports = new List<CareerDayReport>();
+            int cost = IslandMap.Distance(Player.currentTown, town);
+            for (int i = 0; i < cost; i++)
+            {
+                var r = AdvanceTime();
+                if (r != null) reports.Add(r);
+            }
+            Player.currentTown = town;
+            Player.currentPlace = (int)place;
+            return reports;
         }
 
         /// <summary>テスト・ツール用：ワールド・島民・主人公をまとめて1日進める。</summary>
