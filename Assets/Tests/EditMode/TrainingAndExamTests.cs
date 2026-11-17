@@ -58,7 +58,7 @@ namespace SoccerIsland.NPC.Tests
         }
 
         [Test]
-        public void TrainingWithAPartnerHelpsButRevealsNoAbility()
+        public void TrainingWithAPartnerGivesImpressions()
         {
             var c = NewCareer();
             var partner = c.Population.Database.npcs.First(n => n.abilities.dribbling >= 75);
@@ -66,9 +66,33 @@ namespace SoccerIsland.NPC.Tests
             c.Population.Knowledge.GetOrCreate(partner.id).affinity = 50;
             var r = c.Training.Train(TrainingMenu.Dribbling, partner.id);
             Assert.IsTrue(r.done);
-            Assert.IsTrue(!r.partnerLine.Contains("上手") && !r.partnerLine.Contains("次元"), "相手の実力はわからない");
+            Assert.IsTrue(r.impressions.Count >= 1 && r.impressions.All(x => x.Contains(partner.FullName)));
+            Assert.IsTrue(!string.IsNullOrEmpty(r.partnerLine));
+            Assert.IsTrue(!r.Impression.Any(char.IsDigit), "数値は出さない");
             Assert.AreEqual(53, c.Population.Knowledge.Get(partner.id).affinity);
             Assert.IsTrue(c.Population.Knowledge.Knows(partner.id, NPCInfoFlags.Effort));
+        }
+
+        [Test]
+        public void ImpressionsMatchTheAbility()
+        {
+            var rng = new SeededRandom(1);
+            Assert.AreEqual(0, TrainingComments.Tier(95, 60, 0));
+            Assert.AreEqual(1, TrainingComments.Tier(75, 60, 0));
+            Assert.AreEqual(4, TrainingComments.Tier(25, 60, 0));
+
+            // 足が速い相手と走り込むと、速さの感想が出る
+            var c = NewCareer();
+            var fast = c.Population.Database.npcs.Where(n => !n.isIncarcerated).OrderByDescending(n => n.abilities.speed).First();
+            c.Population.Knowledge.Reveal(fast.id, NPCInfoFlags.Basic);
+            c.Population.Knowledge.GetOrCreate(fast.id).affinity = 80;
+            var r = c.Training.Train(TrainingMenu.Running, fast.id);
+            Assert.IsTrue(r.impressions[0].Contains("速") || r.impressions[0].Contains("消えた") || r.impressions[0].Contains("追いつけない") || r.impressions[0].Contains("ぶっちぎ"), r.impressions[0]);
+
+            // 全部の能力・段階にセリフがある
+            for (int stat = 0; stat < NPCAbilities.StatCount; stat++)
+                for (int tier = 0; tier < 5; tier++)
+                    Assert.IsTrue(TrainingComments.Line(stat, tier, "X", rng).Contains("X"));
         }
     }
 }
