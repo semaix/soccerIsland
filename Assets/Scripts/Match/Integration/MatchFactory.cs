@@ -160,6 +160,15 @@ namespace SoccerIsland.Match
             };
         }
 
+        /// <summary>電話で誘われた試合に助っ人として出る。</summary>
+        public static MatchSetup FromInvite(IslandCareer career, IncomingCall call)
+        {
+            if (call == null || call.kind != IncomingCallKind.MatchInvite) return null;
+            var m = career.World.State.GetMatch(call.matchId);
+            if (m == null || m.played) return null;
+            return FromWorldMatch(career, m, call.joinHome ? Side.Home : Side.Away);
+        }
+
         /// <summary>主人公のチームの、今日の試合（なければ null）。</summary>
         public static SoccerIsland.World.Match TodaysTeamMatch(IslandCareer career)
         {

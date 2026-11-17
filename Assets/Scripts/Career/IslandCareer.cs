@@ -11,6 +11,7 @@ namespace SoccerIsland.Career
         public PlayerState player;
         public EconomyState economy;
         public MediaState media;
+        public PhoneState phone;
     }
 
     public class CareerDayReport
@@ -22,6 +23,8 @@ namespace SoccerIsland.Career
         public List<FameEvent> fameEvents = new List<FameEvent>();
         /// <summary>検定日の島民の結果（検定日以外は null）。</summary>
         public List<ExamResult> exams;
+        /// <summary>この日の朝にかかってきた電話。</summary>
+        public List<IncomingCall> incomingCalls = new List<IncomingCall>();
     }
 
     /// <summary>NPCに話しかけたときの結果（会話＋ファンからのお願い）。</summary>
@@ -53,6 +56,7 @@ namespace SoccerIsland.Career
         public SoccerNewspaper Newspaper { get; }
         public TrainingSystem Training { get; }
         public AbilityExam Exam { get; }
+        public PhoneSystem Phone { get; }
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -80,6 +84,7 @@ namespace SoccerIsland.Career
             Newspaper = new SoccerNewspaper(db, world.State, Player, Economy, world.Population.Market, Vote, rng);
             Training = new TrainingSystem(Player, db, world.Population.Knowledge, rng);
             Exam = new AbilityExam(Player, db, Fame, rng);
+            Phone = new PhoneSystem(Player, world.Population, world.State, Economy, save?.phone ?? new PhoneState(), rng);
 
             if (save == null)
             {
@@ -139,6 +144,7 @@ namespace SoccerIsland.Career
             };
             report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents, _pendingExams);
             report.exams = _pendingExams;
+            report.incomingCalls = Phone.IncomingCalls();
             _pendingExams = null;
             _economyEvents.Clear();
             _fameEvents.Clear();
@@ -156,6 +162,6 @@ namespace SoccerIsland.Career
             return AfterDayAdvance(p);
         }
 
-        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media };
+        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media, phone = Phone.State };
     }
 }
