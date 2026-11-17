@@ -70,6 +70,7 @@ namespace SoccerIsland.NPC
         {
             new RevealStep(NPCInfoFlags.Club, 0),
             new RevealStep(NPCInfoFlags.Position, 0),
+            new RevealStep(NPCInfoFlags.ExamGrade, 5),
             new RevealStep(NPCInfoFlags.SoccerPersonality, 10),
             new RevealStep(NPCInfoFlags.Personality, 15),
             new RevealStep(NPCInfoFlags.Salary, 25),
@@ -126,6 +127,7 @@ namespace SoccerIsland.NPC
                 if (step.flag == NPCInfoFlags.UndergroundSecret && !npc.isUnderground) { _book.Reveal(npc.id, step.flag); continue; }
                 if (step.flag == NPCInfoFlags.PhoneNumber && string.IsNullOrEmpty(npc.phoneNumber)) { _book.Reveal(npc.id, step.flag); continue; }
                 if (step.flag == NPCInfoFlags.Club && npc.clubId < 0) { _book.Reveal(npc.id, step.flag); continue; }
+                if (step.flag == NPCInfoFlags.ExamGrade && npc.examGrade < 0) { _book.Reveal(npc.id, step.flag); continue; }
 
                 result.revealed |= _book.Reveal(npc.id, step.flag);
                 result.lines.Add(NPCDialogue.Reveal(npc, step.flag, _db, _rng));

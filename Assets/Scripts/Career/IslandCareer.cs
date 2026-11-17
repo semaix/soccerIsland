@@ -20,6 +20,8 @@ namespace SoccerIsland.Career
         public NewspaperIssue newspaper;
         public List<EconomyEvent> economyEvents = new List<EconomyEvent>();
         public List<FameEvent> fameEvents = new List<FameEvent>();
+        /// <summary>検定日の島民の結果（検定日以外は null）。</summary>
+        public List<ExamResult> exams;
     }
 
     /// <summary>NPCに話しかけたときの結果（会話＋ファンからのお願い）。</summary>
@@ -49,10 +51,13 @@ namespace SoccerIsland.Career
         public FanInteractionSystem Fans { get; }
         public PopularityVote Vote { get; }
         public SoccerNewspaper Newspaper { get; }
+        public TrainingSystem Training { get; }
+        public AbilityExam Exam { get; }
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
         WorldDayReport _pendingWorld;
+        List<ExamResult> _pendingExams;
 
         public IslandCareer(IslandWorld world, CareerSaveData save = null)
         {
@@ -73,6 +78,8 @@ namespace SoccerIsland.Career
             Fans = new FanInteractionSystem(Player, world.Population.Knowledge, Fame, rng, _fameEvents, today);
             Vote = new PopularityVote(db, world.State, Player, rng);
             Newspaper = new SoccerNewspaper(db, world.State, Player, Economy, world.Population.Market, Vote, rng);
+            Training = new TrainingSystem(Player, db, world.Population.Knowledge, rng);
+            Exam = new AbilityExam(Player, db, Fame, rng);
 
             if (save == null)
             {
@@ -115,12 +122,14 @@ namespace SoccerIsland.Career
             Betting.DrawIfDue();
             Bank.TickDay();
             if (Population.Database.currentDay % 30 == 29) Scouting.Payroll();
+            _pendingExams = AbilityExam.IsExamDay(Population.Database.currentDay) ? Exam.RunMonthlyExam() : null;
         }
 
         /// <summary>日付が進んだ後に呼ぶ。朝刊を発行する。</summary>
         public CareerDayReport AfterDayAdvance(DayReport populationReport)
         {
             Fame.TickDay();
+            Training.TickDay();
             var report = new CareerDayReport
             {
                 world = _pendingWorld,
@@ -128,7 +137,9 @@ namespace SoccerIsland.Career
                 economyEvents = new List<EconomyEvent>(_economyEvents),
                 fameEvents = new List<FameEvent>(_fameEvents),
             };
-            report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents);
+            report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents, _pendingExams);
+            report.exams = _pendingExams;
+            _pendingExams = null;
             _economyEvents.Clear();
             _fameEvents.Clear();
             _pendingWorld = null;

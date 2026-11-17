@@ -37,7 +37,7 @@ namespace SoccerIsland.Career
         }
 
         public NewspaperIssue Publish(MediaState media, WorldDayReport world, DayReport population,
-                                      List<EconomyEvent> economyEvents, List<FameEvent> fameEvents)
+                                      List<EconomyEvent> economyEvents, List<FameEvent> fameEvents, List<ExamResult> exams = null)
         {
             var issue = new NewspaperIssue { day = _db.currentDay, year = _db.currentYear };
             var a = issue.articles;
@@ -46,6 +46,7 @@ namespace SoccerIsland.Career
             if (population != null) { AddMarket(a, population.headlines); AddLife(a, population.lifeEvents); }
             if (economyEvents != null) foreach (var e in economyEvents) AddEconomy(a, e);
             if (fameEvents != null) foreach (var e in fameEvents) AddFame(a, e);
+            if (exams != null) AddExams(a, exams);
             if (_rng.Chance(gossipChancePerDay)) AddGossip(a);
             if (issue.day % 7 == 0) AddRanking(a);
             if (issue.day % 30 == 0) AddVote(a, media);
@@ -295,6 +296,25 @@ namespace SoccerIsland.Career
             var ids = new List<int> { star.id };
             if (other != null && hypeOther != 0f) { _market.AddHype(other, hypeOther, "gossip"); ids.Add(other.id); }
             a.Add(new Article { category = ArticleCategory.Gossip, priority = 30 + (int)(star.fame / 4), title = title, body = body, npcIds = ids });
+        }
+
+        // ---------------- 能力検定 ----------------
+
+        void AddExams(List<Article> a, List<ExamResult> exams)
+        {
+            var lines = new List<string>();
+            foreach (var r in exams)
+            {
+                var n = _db.Get(r.npcId);
+                if (n == null) continue;
+                if (r.BigJump)
+                    a.Add(new Article { category = ArticleCategory.Island, priority = 60, npcIds = { n.id },
+                        title = $"{n.FullName}、能力検定で{ExamGrades.Label(r.before)}から{ExamGrades.Label(r.after)}へ大躍進",
+                        body = "協会関係者も「こんな上がり方は見たことがない」と驚き。" });
+                if (r.after >= 0 && r.after <= 2) lines.Add($"{ExamGrades.Label(r.after)} {n.FullName}（{NPCLabels.Of(n.hometown)}）");
+            }
+            if (lines.Count > 0)
+                a.Add(new Article { category = ArticleCategory.Ranking, priority = 26, title = "今月の能力検定 上位合格者", body = string.Join("\n", lines) });
         }
 
         // ---------------- ランキング・人気投票 ----------------

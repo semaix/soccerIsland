@@ -65,6 +65,17 @@ namespace SoccerIsland.Career
         /// <summary>レベル（試合の経験値で上がる）。レベルで必殺技を覚える。</summary>
         public int level = 1;
         public int exp;
+
+        // ---- 練習・検定 ----
+        /// <summary>疲労 0-100。高いと試合でガッツが減る。毎日回復する。</summary>
+        public float fatigue;
+        public int lastTrainingDay = -1;
+        public int trainingsToday;
+        /// <summary>各能力の練習の進み具合（1.0 で能力値+1）。</summary>
+        public List<float> statProgress = new List<float>();
+        /// <summary>能力検定の最高の級（-1 は未受験）。</summary>
+        public int examGrade = -1;
+        public int lastExamDay = -100;
         public NPCAbilities abilities = DefaultAbilities();
 
         public static NPCAbilities DefaultAbilities()

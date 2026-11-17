@@ -90,6 +90,10 @@ namespace SoccerIsland.NPC
         /// <summary>努力度 0-100（会話で判明。ランク表示）。</summary>
         public int effort;
         public GrowthType growthType;
+        /// <summary>能力検定の級（ExamGrades）。-1 は未受験。</summary>
+        public int examGrade = -1;
+        /// <summary>検定を受けた年。</summary>
+        public int examYear;
 
         // ---------------- お金 ----------------
         /// <summary>本業の年収（円）。</summary>

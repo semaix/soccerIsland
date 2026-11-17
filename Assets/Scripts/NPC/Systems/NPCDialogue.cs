@@ -63,6 +63,10 @@ namespace SoccerIsland.NPC
                 }
                 case NPCInfoFlags.Position:
                     return $"ポジションは{PositionText(n.position)}。";
+                case NPCInfoFlags.ExamGrade:
+                    return n.examYear < db.currentYear - 1
+                        ? $"協会の検定？ {n.examYear}年に受けて{ExamGrades.Label(n.examGrade)}だったよ。それっきり受けてないけど。"
+                        : $"協会の検定は{ExamGrades.Label(n.examGrade)}。";
                 case NPCInfoFlags.SoccerPersonality:
                     return SoccerPersonalityLine(n);
                 case NPCInfoFlags.Personality:
