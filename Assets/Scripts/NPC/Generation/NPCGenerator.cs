@@ -323,12 +323,15 @@ namespace SoccerIsland.NPC
             return man * 10000;
         }
 
+        /// <summary>
+        /// 島内専用の架空の電話番号。実在の番号（090/080/070 など）と一致しないよう、
+        /// 現実では使われない「島」プレフィックス付きの形式にする。
+        /// </summary>
         string NewPhoneNumber()
         {
             while (true)
             {
-                string prefix = _rng.Chance(0.5f) ? "090" : (_rng.Chance(0.5f) ? "080" : "070");
-                string phone = $"{prefix}-{_rng.Range(0, 10000):D4}-{_rng.Range(0, 10000):D4}";
+                string phone = $"{PrivacyPolicy.IslandPhonePrefix}-{_rng.Range(0, 10000):D4}-{_rng.Range(0, 10000):D4}";
                 if (_usedPhones.Add(phone)) return phone;
             }
         }

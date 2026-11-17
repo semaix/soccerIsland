@@ -8,6 +8,7 @@ namespace SoccerIsland.NPC.UnityIntegration
     /// シーンに1つ置くNPC管理コンポーネント。
     /// 起動時にセーブがあればロード、なければ島民1000人を生成する。
     /// ゲーム側からは NPCManager.Instance.Population 経由で会話・検索・ランキングを使う。
+    /// セーブは端末内のみ。端末の個人情報は読まず、通信もしない（PrivacyPolicy 参照）。
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public class NPCManager : MonoBehaviour
@@ -98,7 +99,12 @@ namespace SoccerIsland.NPC.UnityIntegration
         {
             var json = JsonUtility.ToJson(Population.CreateSave());
             File.WriteAllText(SavePath, json);
-            Debug.Log($"[NPCManager] セーブしました: {SavePath} ({json.Length / 1024}KB)");
+#if UNITY_IOS && !UNITY_EDITOR
+            // iCloud バックアップに含めない（セーブデータを端末の外に出さない）
+            UnityEngine.iOS.Device.SetNoBackupFlag(SavePath);
+#endif
+            // パスには端末のユーザー名などが含まれ得るのでログに出さない
+            Debug.Log($"[NPCManager] セーブしました ({json.Length / 1024}KB)");
         }
 
         public bool TryLoad()

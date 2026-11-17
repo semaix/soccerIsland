@@ -47,7 +47,7 @@ var mgr = NPCManager.Instance;
 ConversationResult r = mgr.Talk(npcId);          // 会話：r.lines にセリフ、r.marketChanges に価値変動
 NPCProfileView p = mgr.GetProfile(npcId);        // 判明済みの情報だけ入ったプロフィール
 var top = mgr.Database.GetOfficialMarketValueRanking(20); // サッカー協会の市場価値ランキング
-var tel = mgr.Database.FindByPhone("090-1234-5678");       // 電話システム
+var tel = mgr.Database.FindByPhone("島-1234-5678");       // 電話システム
 mgr.AdvanceDay();                                 // 1日進める（365日で年越し）
 mgr.Save();
 ```
@@ -68,6 +68,14 @@ mgr.Save();
 | 変動 | 話しかけられると少し話題に、噂で褒められると↑・悪口で↓。話題性は日ごとに0へ戻る |
 | 裏 | マフィア等は裏の人間。協会未登録だと公式ランキングに載らず、裏ランキングにだけ出る |
 | 隠し設定 | `lifeCycle`（人生何周目か）、`publicPerformanceRate`（表では手を抜く）、刑務所の天才と出所年 |
+
+### 個人情報の方針
+
+- 端末（スマホ）内の個人情報は使わない：連絡先・電話番号・位置情報・カメラ・マイク・端末ID・端末名・広告ID・クリップボードを読まない。
+- 外部に出さない：通信・アナリティクス・外部URLを開く処理を持たない。セーブは端末内のみで、iOSではiCloudバックアップ対象外にする。
+- NPCの名前・電話番号はすべて架空。電話番号は実在番号と一致しない `島-XXXX-XXXX` 形式。
+- `PrivacyComplianceTests` が、`Assets/Scripts` に上記に反するAPIが入ると失敗する。
+- Unityプロジェクト作成時の設定：Services の Analytics / Cloud Diagnostics をオフ、Android は `allowBackup=false` にする。
 
 ### テスト
 
