@@ -97,6 +97,12 @@ namespace SoccerIsland.Career
             return a;
         }
 
+        // ---- 試合イベント ----
+        /// <summary>闇金から八百長を持ちかけられている（引き受けるか決める）。-1 はなし。</summary>
+        public int fixOfferLoanId = -1;
+        /// <summary>八百長を引き受けた闇金のローンID（次の試合で「わざと負けろ」）。-1 はなし。</summary>
+        public int acceptedFixLoanId = -1;
+
         // ---- 持ち物 ----
         public List<InventoryItem> inventory = new List<InventoryItem>();
         /// <summary>身につけている物（商品名）。スパイク・ファッションなど。</summary>

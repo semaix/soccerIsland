@@ -18,10 +18,14 @@ namespace SoccerIsland.Match
         public MeetingResult MeetingResult { get; private set; }
         public MatchResult Result { get; private set; }
 
-        public MatchSession(IslandCareer career, MatchSetup setup)
+        /// <summary>この試合で起きるイベント（ミッション）。EventDirector が状況から選ぶ。</summary>
+        public IMatchMission Event { get; }
+
+        public MatchSession(IslandCareer career, MatchSetup setup, bool directEvents = true)
         {
             Career = career;
             Setup = setup;
+            if (directEvents) Event = EventDirector.Prepare(career, setup, new SeededRandom(setup.seed ^ 0x3E7));
         }
 
         /// <summary>主人公のチームの今日の試合から作る（なければ null）。</summary>

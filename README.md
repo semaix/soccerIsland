@@ -159,6 +159,10 @@ CareerManager.Instance.OnNewspaper += issue => ShowPaper(issue);
 
 **試合イベント**（`MatchMissions`）：足がつった状態で指示だけで勝利 / ファンが見てる、綺麗な足技で活躍しろ / ベテランとしてオフサイドトラップを5回 / 八百長をしろ、わざと負けろ（露骨だと観客にばれる。闇金の借金と連動）
 
+**イベントの自動発生**（`EventDirector`）：主人公の試合の前に、状況に応じてミッションが1つ仕込まれる。
+闇金に八百長を持ちかけられて引き受けた → 「わざと負けろ」／疲れている → 後半に足がつる／大観衆の前でそこそこ有名 → 「綺麗な足技で活躍しろ」／33歳以上のDF → 「オフサイドトラップを5回」／大一番 → 「勝利せよ」。
+成功すると知名度・勝利給・経験値、失敗すると知名度が下がることも。
+
 使い方：
 ```csharp
 var session = MatchSession.ForTodaysTeamMatch(career, new CrampMission(20));
@@ -346,6 +350,7 @@ apt-get install -y mono-mcs mono-runtime   # 初回のみ
 ```
 
 UnityEngine / UnityEditor の最小スタブで全スクリプト（エディタ拡張含む）をコンパイルし、EditMode テストを実行する。
+島で3年間ランダムに暮らす通しテスト（移動・会話・練習・試合・株・宝くじ）も含む。
 `Tools/` は `Assets` の外なので Unity には読み込まれない。
 
 ### 個人情報の方針

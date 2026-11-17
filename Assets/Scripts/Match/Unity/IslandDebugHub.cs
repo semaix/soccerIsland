@@ -363,6 +363,14 @@ namespace SoccerIsland.Match.UnityIntegration
             if (GUILayout.Button("病院に行く（勇心町）")) Say(c.Hospital.TreatProtagonist());
             if (c.Economy.loans.Exists(l => l.lender == Lender.LoanShark) && GUILayout.Button("交番に闇金を通報する")) Say(c.Police.ReportLoanShark());
             GUILayout.EndHorizontal();
+            if (p.fixOfferLoanId >= 0)
+            {
+                GUILayout.Label("闇金「次の試合、わざと負けたら借金を半分にしてやる」");
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("引き受ける")) { c.AnswerFixOffer(true); Say("……引き受けてしまった。"); }
+                if (GUILayout.Button("断る")) { c.AnswerFixOffer(false); Say("きっぱり断った。取り立てが厳しくなるかもしれない。"); }
+                GUILayout.EndHorizontal();
+            }
             if (ReincarnationSystem.CanRetire(p) && GUILayout.Button("引退する（次の人生へ）"))
             {
                 var legacy = CareerManager.Instance.RetireAndStartNextLife();

@@ -215,6 +215,9 @@ namespace SoccerIsland.Career
         /// <summary>日付が進んだ後に呼ぶ。朝刊を発行する。</summary>
         public CareerDayReport AfterDayAdvance(DayReport populationReport)
         {
+            // 闇金に八百長を持ちかけられた
+            foreach (var e in _economyEvents)
+                if (e.type == EconomyEventType.LoanSharkDemandsFix && Player.acceptedFixLoanId < 0) Player.fixOfferLoanId = e.refId;
             Fame.TickDay();
             Training.TickDay();
             if (Population.Database.currentDay % 365 == 0) Player.age++;
@@ -276,6 +279,15 @@ namespace SoccerIsland.Career
         }
 
         public bool IsHere(int npcId) => Locate(npcId).Same(Here);
+
+        /// <summary>闇金の八百長の誘いに答える。引き受けると、次の主人公の試合で「わざと負けろ」が起きる。</summary>
+        public bool AnswerFixOffer(bool accept)
+        {
+            if (Player.fixOfferLoanId < 0) return false;
+            if (accept) Player.acceptedFixLoanId = Player.fixOfferLoanId;
+            Player.fixOfferLoanId = -1;
+            return true;
+        }
 
         /// <summary>今いる場所で開かれているお祭り（なければ null）。</summary>
         public Festival CurrentFestival => Schedule.calendar.At(Population.Database.currentDay, Now, Player.currentTown, (IslandPlace)Player.currentPlace);

@@ -83,6 +83,16 @@ namespace SoccerIsland.Match
                         if (hype != 0f) career.Population.Market.AddHype(n, hype, "match_" + setup.worldMatchId);
                     }
 
+            // ミッションのご褒美・罰
+            for (int i = 0; i < setup.missions.Count && i < result.missions.Count; i++)
+            {
+                var reward = EventDirector.Reward(result.missions[i], setup.missions[i]);
+                result.missions[i].detail = (result.missions[i].detail ?? "") + "　" + reward.text;
+                if (reward.fame != 0f) career.Fame.AddFame(reward.fame);
+                if (reward.money > 0) career.Player.Earn(reward.money, "勝利給", db.currentDay);
+                if (reward.exp > 0) result.levelUps.AddRange(PlayerGrowth.AddExperience(career.Player, reward.exp));
+            }
+
             // 八百長
             foreach (var mission in setup.missions)
             {
