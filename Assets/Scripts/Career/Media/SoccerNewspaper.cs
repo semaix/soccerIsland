@@ -198,6 +198,10 @@ namespace SoccerIsland.Career
                     a.Add(new Article { category = ArticleCategory.Gossip, priority = 35, aboutPlayer = true, npcIds = { n.id },
                         title = $"{_player.name}、ファンに塩対応!?", body = $"{NPCLabels.Of(n.hometown)}の{NPCLabels.Of(n.occupation)}が「サインを断られた」と証言。" });
                     break;
+                case FameEventType.TournamentWon:
+                    a.Add(new Article { category = ArticleCategory.Player, priority = 98, aboutPlayer = true,
+                        title = $"{_player.teamName}、{e.text}で優勝！", body = $"{_player.name}率いる移住者チームが頂点に立った。島中が祝福ムードに。" });
+                    break;
                 case FameEventType.MatchFixingExposed:
                     a.Add(new Article { category = ArticleCategory.Player, priority = 95, aboutPlayer = true,
                         title = $"{_player.name}に八百長疑惑", body = $"{e.text}での不自然なプレーに、ファンから怒りの声が上がっている。" });
