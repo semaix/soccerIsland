@@ -92,6 +92,16 @@ namespace SoccerIsland.Career
             return a;
         }
 
+        // ---- 持ち物 ----
+        public List<InventoryItem> inventory = new List<InventoryItem>();
+        /// <summary>身につけている物（商品名）。スパイク・ファッションなど。</summary>
+        public List<string> equipped = new List<string>();
+        /// <summary>次の試合で効く効果（アイテムを使うとたまる。試合が終わると消える）。</summary>
+        public List<MatchBuff> matchBuffs = new List<MatchBuff>();
+        public int lastRejuvenateDay = -1000;
+        /// <summary>飾った記念品（一度だけ知名度が上がる）。</summary>
+        public List<string> displayed = new List<string>();
+
         // ---- 自作 ----
         public SignatureDesign signature = new SignatureDesign();
         public List<GoalPerformanceDesign> goalPerformances = new List<GoalPerformanceDesign>();

@@ -1311,8 +1311,9 @@ namespace SoccerIsland.Match
             if (d.soccerPersonality == SoccerPersonality.Hysteric) c += 0.08f;
             if (d.tension > 85f) c += 0.05f;
             if (d.role == PlayerRole.Physical || team.instruction == TeamInstruction.PlayPhysical) c += 0.05f;
-            if (HasTrait(team, BossTrait.BribedReferee)) c *= 0.4f;               // 自分たちのファウルは見逃される
-            if (HasTrait(Opponent(team.side), BossTrait.BribedReferee)) c *= 1.6f; // 相手のファウルは厳しく取られる
+            var other = Opponent(team.side);
+            if (HasTrait(team, BossTrait.BribedReferee) && !HasTrait(other, BossTrait.Warded)) c *= 0.4f;  // 自分たちのファウルは見逃される
+            if (HasTrait(other, BossTrait.BribedReferee) && !HasTrait(team, BossTrait.Warded)) c *= 1.6f;  // 相手のファウルは厳しく取られる
             if (!_rng.Chance(c)) return false;
 
             Emit(MatchEventType.Foul, team.side, d, victim, $"{d.name}のファウル！");
@@ -1506,7 +1507,9 @@ namespace SoccerIsland.Match
             foreach (var t in new[] { Home, Away })
             {
                 var opp = Opponent(t.side);
-                if (HasTrait(t, BossTrait.Intimidation))
+                if (HasTrait(t, BossTrait.Intimidation) && HasTrait(opp, BossTrait.Warded))
+                    Emit(MatchEventType.Info, opp.side, null, null, $"{opp.name}は魔除けのおかげで、{t.name}の威圧が効かない！", 0f, true, null, null);
+                else if (HasTrait(t, BossTrait.Intimidation))
                 {
                     foreach (var p in opp.Active)
                         p.tension = Math.Max(0f, p.tension + (p.soccerPersonality == SoccerPersonality.Fighter || p.soccerPersonality == SoccerPersonality.Hysteric ? 5f : -15f));

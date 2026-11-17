@@ -43,15 +43,31 @@ namespace SoccerIsland.Match
 
         public static MatchPlayer FromProtagonist(PlayerState s)
         {
+            var stats = s.abilities.Clone();
+            for (int i = 0; i < NPCAbilities.StatCount; i++) stats[i] = NPCAbilities.Clamp(stats[i] + InventorySystem.EquipmentBonus(s, i));
             var p = new MatchPlayer
             {
-                npcId = -1, name = s.name, isProtagonist = true, position = s.position, stats = s.abilities.Clone(),
+                npcId = -1, name = s.name, isProtagonist = true, position = s.position, stats = stats,
                 personality = Personality.Extrovert, soccerPersonality = SoccerPersonality.Devoted,
                 maxGuts = (int)Math.Round((300 + s.abilities.stamina * 6 + s.level * 10) * (1f - s.fatigue / 200f)), tension = 65f,
                 specials = ProtagonistSpecials(s.level),
             };
+            if (s.matchBuffs.Contains(MatchBuff.Hype)) p.tension = Math.Min(100f, p.tension + 12f);
+            if (s.matchBuffs.Contains(MatchBuff.Headband)) p.tension = Math.Min(100f, p.tension + 6f);
             p.guts = p.maxGuts;
             return p;
+        }
+
+        /// <summary>アイテムの効果をチームに反映する（主人公を入れたあとに呼ぶ）。</summary>
+        public static void ApplyItemBuffs(MatchTeam t, PlayerState s)
+        {
+            if (s.matchBuffs.Contains(MatchBuff.Warded) && !t.traits.Contains(BossTrait.Warded)) t.traits.Add(BossTrait.Warded);
+            if (s.matchBuffs.Contains(MatchBuff.Intimidate) && !t.traits.Contains(BossTrait.Intimidation)) t.traits.Add(BossTrait.Intimidation);
+            if (s.matchBuffs.Contains(MatchBuff.Calm))
+                foreach (var p in t.players)
+                    if (p.soccerPersonality == SoccerPersonality.Hysteric) p.tension = Math.Min(p.tension, 55f);
+            if (s.matchBuffs.Contains(MatchBuff.Headband))
+                foreach (var p in t.players) p.tension = Math.Min(100f, p.tension + 3f);
         }
 
         /// <summary>本土選抜など、島民ではない相手。</summary>
@@ -107,6 +123,7 @@ namespace SoccerIsland.Match
                 if (weakest != null) t.players.Remove(weakest);
             }
             t.players.Add(pro);
+            ApplyItemBuffs(t, s);
         }
 
         static void EnsureKeeper(MatchTeam t)

@@ -51,6 +51,9 @@ namespace SoccerIsland.Career
             return list;
         }
 
+        /// <summary>買った物は持ち物に入る（inventory を渡したとき）。</summary>
+        public InventorySystem inventory;
+
         public bool Buy(int itemId)
         {
             var item = _world.GetItem(itemId);
@@ -58,6 +61,7 @@ namespace SoccerIsland.Career
             if (!_player.TrySpend(item.price, "裏市場: " + item.name, _pop.Database.currentDay)) return false;
             item.stock--;
             if (item.stock <= 0) { item.status = ItemStatus.SoldOut; item.buyerId = -1; }
+            inventory?.Add(item.name);
             return true;
         }
 

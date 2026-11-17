@@ -63,6 +63,7 @@ namespace SoccerIsland.Career
         public AbilityExam Exam { get; }
         public PhoneSystem Phone { get; }
         public RomanceSystem Romance { get; }
+        public InventorySystem Inventory { get; }
         public IslandEventsState Events { get; }
         public BlackMarket BlackMarket { get; }
         public MysteryPlayerQuest Mystery { get; }
@@ -104,6 +105,8 @@ namespace SoccerIsland.Career
             world.Population.Conversation.AddTopicProvider(Mystery);
             world.Population.Conversation.AddTopicProvider(Castaways);
             Scouting.IsGrateful = Castaways.IsGrateful;
+            Inventory = new InventorySystem(Player, world.State, Fame, today);
+            BlackMarket.inventory = Inventory;
             Romance = new RomanceSystem(Player, world.Population, world.State, save?.romance ?? new RomanceState(), _fameEvents, rng);
 
             if (isNew)

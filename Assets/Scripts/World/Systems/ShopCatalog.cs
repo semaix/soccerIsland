@@ -24,6 +24,10 @@ namespace SoccerIsland.World
             Add(list, "古鐘商店", Town.Furugane, "手作りすね当て", 3000, 4, 0);
             Add(list, "古鐘商店", Town.Furugane, "大漁ハチマキ", 1200, 6, 3);
             Add(list, "天峰スポーツ", Town.Tenpou, "最新トレーニングシューズ", 22000, 3, 2);
+            Add(list, "ブティック SHINE", Town.Kirahama, "島ブランドのサングラス", 18000, 4, 2);
+            Add(list, "古着屋 波止場", Town.Furugane, "ヤンキー刺繍の特攻ジャージ", 9800, 3, 1);
+            Add(list, "キラマート", Town.Kirahama, "スタミナ弁当", 650, 30, 30);
+            Add(list, "ユウシンマート", Town.Yushin, "エナジーゼリー", 220, 40, 40);
 
             // ---- 裏市場（場所はころころ変わる） ----
             Add(list, "裏市場", Town.Kirahama, "脅迫タピオカ（裏ルート）", 5000, 8, 4, underground: true);

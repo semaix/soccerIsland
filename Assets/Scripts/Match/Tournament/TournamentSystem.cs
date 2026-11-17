@@ -244,6 +244,7 @@ namespace SoccerIsland.Match
             var t = MatchFactory.FromLineup(_career.Player.teamName, ids, _career.Population.Database, State.underground, rng);
             MatchFactory.InsertProtagonist(t, _career.Player, 11);
             Fill(t, rng, 45);
+            MatchFactory.ApplyPartnerBoost(_career, t);
             return t;
         }
 

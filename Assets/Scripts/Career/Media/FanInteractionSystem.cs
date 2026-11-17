@@ -67,6 +67,7 @@ namespace SoccerIsland.Career
             if (npc.soccerPersonality == SoccerPersonality.MoodMaker) c *= 1.3f;
             if (npc.fame > _player.fame) c *= 0.3f; // 自分より有名な人はねだらない
             if (npc.age < 18) c *= 1.5f;             // 子供はファンになりやすい
+            c *= 1f + InventorySystem.FanBonus(_player); // おしゃれだと声をかけられやすい
             return Math.Min(0.9f, c);
         }
 

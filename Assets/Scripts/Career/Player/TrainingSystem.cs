@@ -101,7 +101,7 @@ namespace SoccerIsland.Career
             if (partner != null && (entry == null || entry.affinity < 30)) { r.refusal = "まだ一緒に練習するほど仲良くない"; return r; }
 
             // 疲れているほど伸びにくい
-            float tired = 1f - _player.fatigue / 150f;
+            float tired = (1f - _player.fatigue / 150f) * (1f + InventorySystem.TrainingBonus(_player));
             foreach (int stat in Primary(menu))
             {
                 int cur = _player.abilities[stat];

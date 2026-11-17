@@ -79,6 +79,7 @@ namespace SoccerIsland.Match
         GeniusVision,   // 天才の読み：相手のコマンドを読んで守る
         IronWall,       // 鉄壁：キーパーが強い
         Unbeatable,     // 絶対王者：条件を満たさないと能力が大幅に上がる（どうしても勝てない裏チーム）
+        Warded,         // 魔除け：相手の威圧・審判買収が効かない
     }
 
     /// <summary>コーチングで与えた個人の役割。</summary>

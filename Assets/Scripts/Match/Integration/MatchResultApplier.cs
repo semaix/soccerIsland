@@ -23,10 +23,11 @@ namespace SoccerIsland.Match
                 }
             }
 
-            // 主人公：知名度と経験値
+            // 主人公：知名度と経験値。アイテムの効果は試合が終わると切れる
             var pro = result.protagonist;
             if (pro != null)
             {
+                career.Player.matchBuffs.Clear();
                 career.Fame.RecordMatch(setup.category, pro.rating, pro.goals, pro.assists, setup.underground ? 0 : pro.beautifulSkills);
                 result.levelUps = PlayerGrowth.AddExperience(career.Player, result.protagonistExp);
                 foreach (var lv in result.levelUps)
