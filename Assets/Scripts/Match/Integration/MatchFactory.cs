@@ -1,0 +1,240 @@
+using System;
+using System.Collections.Generic;
+using SoccerIsland.Career;
+using SoccerIsland.NPC;
+using SoccerIsland.World;
+
+namespace SoccerIsland.Match
+{
+    /// <summary>島のデータから試合を組み立てる。</summary>
+    public static class MatchFactory
+    {
+        /// <summary>島民を試合用の選手にする。表の試合では「表の実力」しか出さない。</summary>
+        public static MatchPlayer FromNPC(NPCData n, bool underground, SeededRandom rng)
+        {
+            var stats = n.abilities.Clone();
+            float rate = underground ? 1f : n.publicPerformanceRate;
+            if (rate < 1f)
+                for (int i = 0; i < NPCAbilities.StatCount; i++) stats[i] = (int)Math.Round(stats[i] * rate);
+            var p = new MatchPlayer
+            {
+                npcId = n.id, name = n.FullName, position = n.position, stats = stats,
+                personality = n.personality, soccerPersonality = n.soccerPersonality,
+                maxGuts = 300 + stats.stamina * 6,
+                tension = 55f + rng.Range(-10f, 10f) + (n.soccerPersonality == SoccerPersonality.MoodMaker ? 10f : 0f),
+            };
+            p.specials = SpecialMoveLibrary.ForNPC(n, stats);
+            p.age = n.age;
+            foreach (var r in n.relations) if (r.type == RelationType.Mentor) p.mentorIds.Add(r.targetId);
+            p.RememberNaturalPosition();
+            p.guts = p.maxGuts;
+            return p;
+        }
+
+        /// <summary>主人公がこれまでのレベルで覚えた必殺技。</summary>
+        public static List<SpecialMove> ProtagonistSpecials(int level)
+        {
+            var list = new List<SpecialMove>();
+            for (int l = 1; l <= level; l++)
+            {
+                var m = SpecialMoveLibrary.ForProtagonistLevel(l);
+                if (m != null) list.Add(m);
+            }
+            return list;
+        }
+
+        public static MatchPlayer FromProtagonist(PlayerState s)
+        {
+            var stats = s.abilities.Clone();
+            for (int i = 0; i < NPCAbilities.StatCount; i++) stats[i] = NPCAbilities.Clamp(stats[i] + InventorySystem.EquipmentBonus(s, i));
+            var p = new MatchPlayer
+            {
+                npcId = -1, name = s.name, isProtagonist = true, position = s.position, stats = stats,
+                personality = Personality.Extrovert, soccerPersonality = SoccerPersonality.Devoted,
+                maxGuts = (int)Math.Round((300 + s.abilities.stamina * 6 + s.level * 10) * (1f - s.fatigue / 200f)), tension = 65f,
+                specials = ProtagonistSpecials(s.level),
+                age = s.age,
+            };
+            if (s.matchBuffs.Contains(MatchBuff.Hype)) p.tension = Math.Min(100f, p.tension + 12f);
+            if (s.matchBuffs.Contains(MatchBuff.Headband)) p.tension = Math.Min(100f, p.tension + 6f);
+            p.guts = p.maxGuts;
+            return p;
+        }
+
+        /// <summary>アイテムの効果をチームに反映する（主人公を入れたあとに呼ぶ）。</summary>
+        public static void ApplyItemBuffs(MatchTeam t, PlayerState s)
+        {
+            if (s.matchBuffs.Contains(MatchBuff.Warded) && !t.traits.Contains(BossTrait.Warded)) t.traits.Add(BossTrait.Warded);
+            if (s.matchBuffs.Contains(MatchBuff.Intimidate) && !t.traits.Contains(BossTrait.Intimidation)) t.traits.Add(BossTrait.Intimidation);
+            if (s.matchBuffs.Contains(MatchBuff.Calm))
+                foreach (var p in t.players)
+                    if (p.soccerPersonality == SoccerPersonality.Hysteric) p.tension = Math.Min(p.tension, 55f);
+            if (s.matchBuffs.Contains(MatchBuff.Headband))
+                foreach (var p in t.players) p.tension = Math.Min(100f, p.tension + 3f);
+        }
+
+        /// <summary>本土選抜など、島民ではない相手。</summary>
+        public static MatchTeam Generic(string name, int strength, int size, SeededRandom rng)
+        {
+            var t = new MatchTeam { name = name };
+            Position[] positions = { Position.GK, Position.DF, Position.DF, Position.DF, Position.DF, Position.MF, Position.MF, Position.MF, Position.MF, Position.FW, Position.FW };
+            for (int i = 0; i < size; i++)
+            {
+                var stats = new NPCAbilities();
+                for (int k = 0; k < NPCAbilities.StatCount; k++) stats[k] = strength + rng.Range(-6, 7);
+                var pos = size >= 11 ? positions[i] : (i == 0 ? Position.GK : i <= 2 ? Position.DF : Position.FW);
+                stats.goalkeeping = pos == Position.GK ? strength + 5 : 15;
+                var p = new MatchPlayer
+                {
+                    npcId = -1000 - i, name = $"{name} {i + 1}番", position = pos, stats = stats,
+                    personality = (Personality)rng.Range(0, 3), soccerPersonality = (SoccerPersonality)rng.Range(0, 6),
+                    maxGuts = 300 + stats.stamina * 6, tension = 60f,
+                };
+                p.guts = p.maxGuts;
+                t.players.Add(p);
+            }
+            return t;
+        }
+
+        public static MatchTeam FromLineup(string name, IEnumerable<int> ids, NPCDatabase db, bool underground, SeededRandom rng)
+        {
+            var t = new MatchTeam { name = name };
+            foreach (var id in ids)
+            {
+                var n = db.Get(id);
+                if (n != null && !n.IsInjured(db.currentDay)) t.players.Add(FromNPC(n, underground, rng)); // けが人は出られない
+            }
+            EnsureKeeper(t);
+            return t;
+        }
+
+        /// <summary>主人公をチームに入れる。11人いれば同じポジションで一番弱い選手と交代。</summary>
+        /// <summary>主人公をチームに入れる。けが中なら試合には出られず、ベンチから指示だけ出す。</summary>
+        public static void InsertProtagonist(MatchTeam t, PlayerState s, int teamSize, int today)
+        {
+            InsertProtagonist(t, s, teamSize);
+            if (s.IsInjured(today)) { var pro = t.Protagonist; if (pro != null) pro.injured = true; }
+        }
+
+        public static void InsertProtagonist(MatchTeam t, PlayerState s, int teamSize)
+        {
+            var pro = FromProtagonist(s);
+            if (t.players.Count >= teamSize)
+            {
+                MatchPlayer weakest = null;
+                foreach (var p in t.players)
+                {
+                    if (p.position == Position.GK) continue;
+                    bool samePos = p.position == pro.position;
+                    if (weakest == null || (samePos && weakest.position != pro.position) ||
+                        (samePos == (weakest.position == pro.position) && p.stats.Overall(p.position) < weakest.stats.Overall(weakest.position)))
+                        weakest = p;
+                }
+                if (weakest != null) t.players.Remove(weakest);
+            }
+            t.players.Add(pro);
+            ApplyItemBuffs(t, s);
+        }
+
+        static void EnsureKeeper(MatchTeam t)
+        {
+            foreach (var p in t.players) if (p.position == Position.GK) return;
+            MatchPlayer best = null;
+            foreach (var p in t.players) if (best == null || p.stats.goalkeeping > best.stats.goalkeeping) best = p;
+            if (best != null) best.position = Position.GK;
+        }
+
+        static int Crowd(MatchCategory c, float fame)
+        {
+            switch (c)
+            {
+                case MatchCategory.IslandSelect: return 5000;
+                case MatchCategory.RegionalDerby: return 2000;
+                case MatchCategory.UndergroundFutsal: return 60;
+                case MatchCategory.PrisonLeague: return 200;
+                case MatchCategory.Beach: return 300 + (int)(fame * 10);
+                default: return 80 + (int)(fame * 20);
+            }
+        }
+
+        /// <summary>
+        /// 島の試合予定から試合を作る。主人公のチームの試合なら主人公側が自動で決まる。
+        /// それ以外の試合に「助っ人」として出るときは protagonistSide を指定する。
+        /// </summary>
+        public static MatchSetup FromWorldMatch(IslandCareer career, SoccerIsland.World.Match m, Side? protagonistSide = null, int seed = 0)
+        {
+            var db = career.Population.Database;
+            var rng = new SeededRandom(seed != 0 ? seed : m.id * 7919 + db.currentDay);
+            bool underground = m.IsUnderground;
+            int size = MatchLabels.TeamSize(m.category);
+
+            var home = FromLineup(m.homeName, m.homeLineup, db, underground, rng);
+            var away = m.awayLineup.Count > 0 ? FromLineup(m.awayName, m.awayLineup, db, underground, rng) : Generic(m.awayName, 66, size, rng);
+
+            if (m.category == MatchCategory.RegionalDerby)
+            {
+                home.town = MajorityTown(m.homeLineup, db);
+                away.town = MajorityTown(m.awayLineup, db);
+            }
+
+            if (!protagonistSide.HasValue && career.Player.teamClubId >= 0)
+            {
+                if (m.homeClubId == career.Player.teamClubId) protagonistSide = Side.Home;
+                else if (m.awayClubId == career.Player.teamClubId) protagonistSide = Side.Away;
+            }
+            if (protagonistSide == Side.Home) InsertProtagonist(home, career.Player, size, db.currentDay);
+            if (protagonistSide == Side.Away) InsertProtagonist(away, career.Player, size, db.currentDay);
+            if (protagonistSide.HasValue) ApplyPartnerBoost(career, protagonistSide == Side.Home ? home : away);
+
+            return new MatchSetup
+            {
+                title = MatchLabels.Of(m.category), category = m.category, home = home, away = away,
+                protagonistSide = protagonistSide, seed = rng.Range(1, int.MaxValue), underground = underground,
+                crowd = Crowd(m.category, career.Player.fame), worldMatchId = m.id,
+                celebration = protagonistSide.HasValue ? career.Player.SelectedPerformance : null,
+                weather = career.World.WeatherOn(m.day),
+            };
+        }
+
+        /// <summary>出場メンバーで一番多い出身の街。</summary>
+        public static int MajorityTown(List<int> lineup, NPCDatabase db)
+        {
+            var count = new int[Enum.GetValues(typeof(Town)).Length];
+            foreach (var id in lineup) { var n = db.Get(id); if (n != null) count[(int)n.hometown]++; }
+            int best = -1;
+            for (int i = 0; i < count.Length; i++) if (count[i] > 0 && (best < 0 || count[i] > count[best])) best = i;
+            return best;
+        }
+
+        /// <summary>恋人と同じチームだと、主人公も恋人も燃える。</summary>
+        public static void ApplyPartnerBoost(IslandCareer career, MatchTeam team)
+        {
+            int partner = career.Romance.State.PartnerId;
+            if (partner < 0) return;
+            var p = team.players.Find(x => x.npcId == partner);
+            if (p == null) return;
+            p.tension = Math.Min(100f, p.tension + 15f);
+            var pro = team.Protagonist;
+            if (pro != null) pro.tension = Math.Min(100f, pro.tension + 15f);
+        }
+
+        /// <summary>電話で誘われた試合に助っ人として出る。</summary>
+        public static MatchSetup FromInvite(IslandCareer career, IncomingCall call)
+        {
+            if (call == null || call.kind != IncomingCallKind.MatchInvite) return null;
+            var m = career.World.State.GetMatch(call.matchId);
+            if (m == null || m.played) return null;
+            return FromWorldMatch(career, m, call.joinHome ? Side.Home : Side.Away);
+        }
+
+        /// <summary>主人公のチームの、今日の試合（なければ null）。</summary>
+        public static SoccerIsland.World.Match TodaysTeamMatch(IslandCareer career)
+        {
+            int club = career.Player.teamClubId;
+            if (club < 0) return null;
+            foreach (var m in career.World.TodaysMatches())
+                if (!m.played && (m.homeClubId == club || m.awayClubId == club)) return m;
+            return null;
+        }
+    }
+}

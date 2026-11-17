@@ -1,0 +1,9 @@
+{
+    "name": "SoccerIsland.Field.Editor",
+    "rootNamespace": "SoccerIsland.Field.EditorTools",
+    "references": [],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true
+}

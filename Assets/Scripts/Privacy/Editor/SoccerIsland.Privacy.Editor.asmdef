@@ -1,0 +1,9 @@
+{
+    "name": "SoccerIsland.Privacy.Editor",
+    "rootNamespace": "SoccerIsland.Privacy.EditorTools",
+    "references": [],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true
+}

@@ -1,0 +1,10 @@
+{
+    "name": "SoccerIsland.World",
+    "rootNamespace": "SoccerIsland.World",
+    "references": ["SoccerIsland.NPC"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

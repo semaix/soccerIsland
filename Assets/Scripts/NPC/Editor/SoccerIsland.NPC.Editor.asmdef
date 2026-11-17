@@ -1,0 +1,9 @@
+{
+    "name": "SoccerIsland.NPC.Editor",
+    "rootNamespace": "SoccerIsland.NPC.EditorTools",
+    "references": ["SoccerIsland.NPC"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true
+}
