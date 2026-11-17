@@ -42,7 +42,8 @@ namespace SoccerIsland.Career
             var issue = new NewspaperIssue { day = _db.currentDay, year = _db.currentYear };
             var a = issue.articles;
 
-            if (world != null) { AddMatches(a, world.playedMatches); AddShop(a, world.purchases); }
+            if (world != null) { AddMatches(a, world.playedMatches); AddShop(a, world.purchases); AddPostponed(a, world.postponed); }
+            AddForecast(a, issue.day);
             if (population != null) { AddMarket(a, population.headlines); AddLife(a, population.lifeEvents); }
             if (economyEvents != null) foreach (var e in economyEvents) AddEconomy(a, e);
             if (fameEvents != null) foreach (var e in fameEvents) AddFame(a, e);
@@ -119,6 +120,23 @@ namespace SoccerIsland.Career
             int best = -1;
             for (int i = 0; i < count.Length; i++) if (count[i] > 0 && (best < 0 || count[i] > count[best])) best = i;
             return best;
+        }
+
+        // ---------------- 天気 ----------------
+
+        void AddPostponed(List<Article> a, List<Match> postponed)
+        {
+            if (postponed == null || postponed.Count == 0) return;
+            a.Add(new Article { category = ArticleCategory.Island, priority = 45,
+                title = $"嵐で{postponed.Count}試合が延期", body = "台風の影響で、昨日予定されていた試合は1週間後以降に延期された。" });
+        }
+
+        void AddForecast(List<Article> a, int day)
+        {
+            var w = WeatherSystem.WeatherOf(_db.seed, day);
+            string extra = w == Weather.Storm ? "外出は控えて。試合は延期の見込み。" : w == Weather.Rain ? "ピッチが滑りやすい。パスの精度に注意。" : w == Weather.Snow ? "足元に注意。" : "絶好のサッカー日和。";
+            a.Add(new Article { category = ArticleCategory.Island, priority = w == Weather.Storm ? 50 : 3,
+                title = $"今日の天気：{WeatherSystem.Label(w)}（{WeatherSystem.Label(WeatherSystem.SeasonOf(day))}）", body = extra });
         }
 
         // ---------------- 市場価値・島のニュース ----------------

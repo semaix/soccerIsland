@@ -58,12 +58,16 @@ namespace SoccerIsland.Career
             float r = Roll(n.id, day, t);
             if (n.IsInjured(day)) return t == TimeOfDay.Afternoon ? IslandPlace.Hospital : IslandPlace.Home;
             bool matchToday = _world.NextMatchOf(n.id, day, 0) != null;
+            var weather = WeatherSystem.WeatherOf(_db.seed, day);
+            bool bad = WeatherSystem.IsBad(weather);
+            if (weather == Weather.Storm && t != TimeOfDay.Night && n.occupation != Occupation.Doctor && n.occupation != Occupation.Nurse &&
+                n.occupation != Occupation.Police && n.occupation != Occupation.Firefighter) return IslandPlace.Home; // 嵐の日はみんな家にこもる
 
             switch (t)
             {
                 case TimeOfDay.Morning:
-                    if (n.occupation == Occupation.Retired) return r < 0.5f ? IslandPlace.Beach : IslandPlace.Home;
-                    if (n.occupation == Occupation.Unemployed || n.occupation == Occupation.Castaway) return r < 0.3f ? IslandPlace.Beach : IslandPlace.Home;
+                    if (n.occupation == Occupation.Retired) return r < 0.5f && !bad ? IslandPlace.Beach : IslandPlace.Home;
+                    if (n.occupation == Occupation.Unemployed || n.occupation == Occupation.Castaway) return r < 0.3f && !bad ? IslandPlace.Beach : IslandPlace.Home;
                     if (n.occupation == Occupation.Bartender) return IslandPlace.Home; // 夜型
                     return IslandPlace.Workplace;
 
@@ -75,9 +79,10 @@ namespace SoccerIsland.Career
 
                 case TimeOfDay.Evening:
                     if (n.occupation == Occupation.Bartender) return IslandPlace.Bar;
-                    if (n.effort >= 60 && r < 0.4f + n.effort / 250f) return IslandPlace.ClubGround;
-                    if (n.age >= 20 && n.personality == Personality.Extrovert && r < 0.6f) return IslandPlace.Bar;
-                    if (n.personality == Personality.Gloomy && r < 0.3f) return IslandPlace.Beach;
+                    // 雨の日にグラウンドで練習するのは、よほどの努力家だけ
+                    if (n.effort >= (bad ? 80 : 60) && r < 0.4f + n.effort / 250f) return IslandPlace.ClubGround;
+                    if (n.age >= 20 && n.personality == Personality.Extrovert && r < (bad ? 0.75f : 0.6f)) return IslandPlace.Bar;
+                    if (n.personality == Personality.Gloomy && r < 0.3f && !bad) return IslandPlace.Beach;
                     return IslandPlace.Home;
 
                 default:

@@ -22,6 +22,8 @@ namespace SoccerIsland.Match
         public List<IMatchMission> missions = new List<IMatchMission>();
         /// <summary>CPUチームの陣形・作戦を性格から自動で決める。</summary>
         public bool autoSelectCpuTactics = true;
+        /// <summary>試合の日の天気。雨はボールが滑り、雪は足が重い。</summary>
+        public Weather weather = Weather.Sunny;
         /// <summary>主人公がゴールを決めたときのパフォーマンス（null ならなし）。</summary>
         public SoccerIsland.Career.GoalPerformanceDesign celebration;
         /// <summary>「絶対王者」の弱点を見つけたか（見つけていないと勝てない）。</summary>
@@ -137,6 +139,9 @@ namespace SoccerIsland.Match
             }
             ApplyBossTraits();
             ApplyTownRivalry();
+            if (setup.weather != Weather.Sunny && setup.weather != Weather.Cloudy)
+                Emit(MatchEventType.Info, Side.Home, null, null,
+                     setup.weather == Weather.Rain ? "雨のピッチ。ボールがよく滑る……！" : setup.weather == Weather.Snow ? "雪の中の試合。足が重い……！" : "嵐の中の試合だ！", 0f, true, null, null);
             foreach (var t in new[] { Home, Away }) ApplyVeteransAndMentors(t);
             Emit(MatchEventType.Info, Side.Home, null, null, $"{setup.title}　{setup.home.name} vs {setup.away.name}　観客{setup.crowd}人");
             foreach (var m in setup.missions) m.OnStart(this);
@@ -808,7 +813,25 @@ namespace SoccerIsland.Match
 
         Side SideOf(MatchPlayer p) => Home.players.Contains(p) ? Side.Home : Side.Away;
 
-        float Roll(float v) => v + _rng.Gaussian(0f, rollStdDev);
+        float Roll(float v) => v + _rng.Gaussian(0f, rollStdDev * (Setup.weather == Weather.Rain ? 1.25f : 1f));
+
+        /// <summary>天気による補正。雨：パス・ドリブルが乱れる。雪：ドリブルが重い。</summary>
+        float WeatherPenalty(MatchCommand c)
+        {
+            switch (Setup.weather)
+            {
+                case Weather.Rain:
+                    if (c == MatchCommand.Pass || c == MatchCommand.LongPass || c == MatchCommand.OneTwo || c == MatchCommand.Centering) return -4f;
+                    if (c == MatchCommand.Dribble || c == MatchCommand.FlairDribble || c == MatchCommand.SpecialDribble) return -3f;
+                    return 0f;
+                case Weather.Snow:
+                case Weather.Storm:
+                    if (c == MatchCommand.Dribble || c == MatchCommand.FlairDribble || c == MatchCommand.SpecialDribble) return -5f;
+                    if (c == MatchCommand.LongPass || c == MatchCommand.Centering) return -5f;
+                    return -1f;
+                default: return 0f;
+            }
+        }
 
         void Spend(MatchPlayer p, MatchCommand c, SpecialMove special = null)
         {
@@ -888,7 +911,7 @@ namespace SoccerIsland.Match
         {
             bool flair = cmd == MatchCommand.FlairDribble;
             float att = (a.stats.dribbling * 0.5f + a.stats.technique * 0.25f + a.stats.speed * 0.25f) * Perf(a) - (flair ? 8f : 0f) + (special?.power ?? 0)
-                        + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane);
+                        + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane) + WeatherPenalty(cmd);
             if (special != null)
                 Emit(MatchEventType.Dribble, Possession, a, d, $"{a.name}「{special.shout}」　{special.name}！", 0f, true, special.name, special.shout);
 
@@ -947,7 +970,7 @@ namespace SoccerIsland.Match
         {
             if (target == null) { ResolveKeep(a, d, def); return; }
             float pass = (a.stats.passing * 0.7f + a.stats.technique * 0.3f) * Perf(a) + TeamOf(Possession).chemistry.Teamwork * 20f
-                         + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane);
+                         + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane) + WeatherPenalty(cmd);
             if (cmd == MatchCommand.LongPass) pass -= 8f;
             if (cmd == MatchCommand.OneTwo) { pass += (target.stats.passing - 50) * 0.2f; Spend(target, MatchCommand.OneTwo); }
 
@@ -1014,7 +1037,7 @@ namespace SoccerIsland.Match
         {
             if (target == null) { ResolveKeep(a, d, def); return; }
             float cross = (a.stats.passing * 0.6f + a.stats.technique * 0.4f) * Perf(a)
-                          + FormationSystem.AttackBonus(TeamOf(Possession), MatchCommand.Centering, Zone, Lane);
+                          + FormationSystem.AttackBonus(TeamOf(Possession), MatchCommand.Centering, Zone, Lane) + WeatherPenalty(MatchCommand.Centering);
             if (d != null && def == MatchCommand.PassCut)
             {
                 float cut = (d.stats.defense * 0.5f + d.stats.speed * 0.3f + d.stats.mental * 0.2f) * Perf(d);
@@ -1202,7 +1225,7 @@ namespace SoccerIsland.Match
                 shot *= 0.85f;
             }
 
-            float wide = 0.12f + (Zone < 4 ? 0.2f : 0f) - (special != null ? 0.08f : 0f);
+            float wide = 0.12f + (Zone < 4 ? 0.2f : 0f) - (special != null ? 0.08f : 0f) + (Setup.weather == Weather.Rain ? 0.05f : 0f);
             if (_rng.Chance(wide))
             {
                 Emit(MatchEventType.Missed, Possession, a, null, "シュートはゴールの外へ！");

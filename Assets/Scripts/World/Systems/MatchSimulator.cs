@@ -30,8 +30,12 @@ namespace SoccerIsland.World
             if (m.played) return;
             float home = Strength(m.homeLineup, m.IsUnderground, mainlandStrength);
             float away = Strength(m.awayLineup, m.IsUnderground, mainlandStrength);
-            m.homeScore = Poisson(baseGoals * (float)Math.Exp((home - away) / 15f));
-            m.awayScore = Poisson(baseGoals * (float)Math.Exp((away - home) / 15f));
+            // 雨の日は荒れて番狂わせが起きやすく、雪の日は点が入りにくい
+            var w = WeatherSystem.WeatherOf(_db.seed, m.day);
+            float diff = (home - away) / (w == Weather.Rain ? 22f : 15f);
+            float goals = baseGoals * (w == Weather.Snow ? 0.75f : 1f);
+            m.homeScore = Poisson(goals * (float)Math.Exp(diff));
+            m.awayScore = Poisson(goals * (float)Math.Exp(-diff));
             m.homeScorers = PickScorers(m.homeLineup, m.homeScore, m.IsUnderground);
             m.awayScorers = PickScorers(m.awayLineup, m.awayScore, m.IsUnderground);
             m.played = true;

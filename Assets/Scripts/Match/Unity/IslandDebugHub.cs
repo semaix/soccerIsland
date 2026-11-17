@@ -44,7 +44,7 @@ namespace SoccerIsland.Match.UnityIntegration
 
             var db = c.Population.Database;
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"{db.currentYear}年 {db.currentDay}日目 {DailySchedule.Label(c.Now)}　{c.Player.name}（{c.Player.age}歳・{c.Player.cycle}周目）　所持金 {NPCLabels.Yen(c.Player.cash)}　知名度 {c.Player.fame:0}");
+            GUILayout.Label($"{db.currentYear}年 {db.currentDay}日目 {DailySchedule.Label(c.Now)}（{WeatherSystem.Label(c.World.CurrentSeason)}・{WeatherSystem.Label(c.World.TodaysWeather)}）　{c.Player.name}（{c.Player.age}歳・{c.Player.cycle}周目）　所持金 {NPCLabels.Yen(c.Player.cash)}　知名度 {c.Player.fame:0}");
             if (GUILayout.Button("時間を進める", GUILayout.Width(120)))
             {
                 if (c.Now == TimeOfDay.Night)
@@ -147,6 +147,12 @@ namespace SoccerIsland.Match.UnityIntegration
         void Moved(List<CareerDayReport> reports)
         {
             if (reports == null) { Say("そこには行けない"); return; }
+            var c = Career;
+            foreach (var ev in c.LastTravelEvents)
+            {
+                Say("（移動中）" + ev.text);
+                if (ev.fanRequest != null) Say(c.Fans.Respond(ev.fanRequest, true) == FanResponseResult.NoSignature ? "サインをまだ作っていない！" : "ファンに応えた");
+            }
             foreach (var r in reports) Capture(r);
             _selected = -1;
         }
@@ -323,6 +329,7 @@ namespace SoccerIsland.Match.UnityIntegration
             if (GUILayout.Button("サッカーの神様を目指す大会")) _tournament = TournamentSystem.CreateGodCup(c);
             if (GUILayout.Button("地域対抗カップ")) _tournament = TournamentSystem.CreateRegionalCup(c);
             if (GUILayout.Button("裏トーナメント")) _tournament = TournamentSystem.CreateUndergroundTournament(c) ?? _tournament;
+            if (c.World.CurrentSeason == Season.Summer && GUILayout.Button("夏のビーチサッカー大会")) _tournament = TournamentSystem.CreateBeachFestival(c) ?? _tournament;
             if (c.Player.cycle >= 2 && GUILayout.Button("島の頂上決戦")) _tournament = TournamentSystem.CreateSummitCup(c) ?? _tournament;
             if (c.Player.cycle >= 3 && GUILayout.Button("転生の謎を解く最終決戦")) _tournament = TournamentSystem.CreateReincarnationFinal(c) ?? _tournament;
             GUILayout.EndHorizontal();

@@ -12,6 +12,7 @@ namespace SoccerIsland.Match
         UndergroundTournament,  // 裏トーナメント
         RegionalCup,            // 地域対抗カップ
         SummitCup,              // 島の頂上決戦（2周目〜。決勝は仮面のチーム）
+        BeachFestival,          // 夏のビーチサッカー大会（5人制）
         ReincarnationFinal,     // 転生の謎を解く最終決戦（3周目〜。島のボス）
     }
 
@@ -130,6 +131,38 @@ namespace SoccerIsland.Match
             return new TournamentSystem(career, st);
         }
 
+        /// <summary>夏のビーチサッカー大会（夏だけ）。5人制で、煌浜ビーチで行う。</summary>
+        public static TournamentSystem CreateBeachFestival(IslandCareer career)
+        {
+            if (career.World.CurrentSeason != Season.Summer) return null;
+            var st = new TournamentState { name = "夏のビーチサッカー大会", kind = TournamentKind.BeachFestival, prize = 3000000, famePrize = 5f, seed = career.Population.Database.currentDay * 17 + 9 };
+            st.entries.Add(new TournamentEntry { name = career.Player.teamName, isPlayer = true });
+            var db = career.Population.Database;
+            foreach (var club in db.clubs)
+                if ((club.category == ClubCategory.Beach || club.town == Town.Kirahama && club.category == ClubCategory.Town) && st.entries.Count < 6)
+                    st.entries.Add(new TournamentEntry { name = club.name, clubId = club.id });
+            foreach (var club in StrongestClubs(career, 4, false))
+                if (st.entries.Count < 7 && !st.entries.Exists(e => e.clubId == club.id)) st.entries.Add(new TournamentEntry { name = club.name, clubId = club.id });
+            while (st.entries.Count < 8) st.entries.Add(new TournamentEntry { name = $"海の家チーム{st.entries.Count}", clubId = -2 });
+            Seed(st, godTeamLast: false);
+            return new TournamentSystem(career, st);
+        }
+
+        int TeamSize => State.kind == TournamentKind.BeachFestival ? 5 : 11;
+
+        /// <summary>5人制なら、キーパー1人＋うまい順に絞る（主人公は必ず残す）。</summary>
+        void Trim(MatchTeam t)
+        {
+            int size = TeamSize;
+            if (t.players.Count <= size) return;
+            var gk = t.players.Find(p => p.position == Position.GK);
+            var rest = t.players.FindAll(p => p != gk);
+            rest.Sort((a, b) => (b.isProtagonist ? 1000 : b.stats.Overall(b.position)).CompareTo(a.isProtagonist ? 1000 : a.stats.Overall(a.position)));
+            t.players.Clear();
+            if (gk != null) t.players.Add(gk);
+            foreach (var p in rest) { if (t.players.Count >= size) break; t.players.Add(p); }
+        }
+
         /// <summary>島の頂上決戦（2周目以降）。決勝で正体不明の「仮面のチーム」と当たる。</summary>
         public static TournamentSystem CreateSummitCup(IslandCareer career)
         {
@@ -234,6 +267,7 @@ namespace SoccerIsland.Match
             }
             else t = MatchFactory.Generic(e.name, 52, 11, rng);
             t.name = e.name;
+            Trim(t);
             return t;
         }
 
@@ -280,7 +314,8 @@ namespace SoccerIsland.Match
             var setup = new MatchSetup
             {
                 title = $"{State.name} {State.RoundName}",
-                category = State.underground ? MatchCategory.UndergroundFutsal : State.kind == TournamentKind.RegionalCup ? MatchCategory.RegionalDerby : MatchCategory.IslandSelect,
+                category = State.underground ? MatchCategory.UndergroundFutsal : State.kind == TournamentKind.RegionalCup ? MatchCategory.RegionalDerby
+                         : State.kind == TournamentKind.BeachFestival ? MatchCategory.Beach : MatchCategory.IslandSelect,
                 home = playerHome ? me : them,
                 away = playerHome ? them : me,
                 protagonistSide = playerHome ? Side.Home : Side.Away,
@@ -289,6 +324,7 @@ namespace SoccerIsland.Match
                 underground = State.underground,
                 unbeatableBroken = BossTeams.KnowsUndergroundKingsWeakness(_career),
                 celebration = _career.Player.SelectedPerformance,
+                weather = _career.World.TodaysWeather == Weather.Storm ? Weather.Rain : _career.World.TodaysWeather,
             };
             return setup;
         }

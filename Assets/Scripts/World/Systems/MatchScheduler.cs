@@ -42,6 +42,9 @@ namespace SoccerIsland.World
         void ScheduleDay(int day)
         {
             var busy = new HashSet<int>();
+            // 延期されてきた試合の出場メンバーは、その日はもう予定がある
+            foreach (var m in _state.matches)
+                if (m.day == day) { foreach (var id in m.homeLineup) busy.Add(id); foreach (var id in m.awayLineup) busy.Add(id); }
             int weekday = day % 7;
 
             if (day % 60 == 59) ScheduleIslandSelect(day, busy);

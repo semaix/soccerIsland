@@ -192,6 +192,7 @@ namespace SoccerIsland.Match
                 protagonistSide = protagonistSide, seed = rng.Range(1, int.MaxValue), underground = underground,
                 crowd = Crowd(m.category, career.Player.fame), worldMatchId = m.id,
                 celebration = protagonistSide.HasValue ? career.Player.SelectedPerformance : null,
+                weather = career.World.WeatherOn(m.day),
             };
         }
 

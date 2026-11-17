@@ -45,6 +45,8 @@ namespace SoccerIsland.Career
         /// <summary>場所の制限：主人公がグラウンドにいるか／その島民が同じ場所にいるか（IslandCareer が差し込む）。</summary>
         public Func<bool> atGround;
         public Func<int, bool> isHere;
+        /// <summary>今日の天気（IslandCareer が差し込む）。嵐は外で練習できない、雨は疲れやすい。</summary>
+        public Func<SoccerIsland.World.Weather> weather;
 
         readonly PlayerState _player;
         readonly NPCDatabase _db;
@@ -98,6 +100,8 @@ namespace SoccerIsland.Career
             if (_player.trainingsToday >= maxPerDay) { r.refusal = "今日はもう練習できない"; return r; }
             if (_player.fatigue >= 90f) { r.refusal = "疲れすぎて体が動かない……"; return r; }
             if (atGround != null && !atGround()) { r.refusal = "練習はグラウンドで"; return r; }
+            var w = weather != null ? weather() : SoccerIsland.World.Weather.Sunny;
+            if (w == SoccerIsland.World.Weather.Storm && menu != TrainingMenu.Weights && menu != TrainingMenu.Tactics) { r.refusal = "嵐で外に出られない（筋トレか戦術研究ならできる）"; return r; }
             if (partnerId >= 0 && isHere != null && !isHere(partnerId)) { r.refusal = "その人は今グラウンドにいない"; return r; }
 
             while (_player.statProgress.Count < NPCAbilities.StatCount) _player.statProgress.Add(0f);
@@ -122,7 +126,8 @@ namespace SoccerIsland.Career
             }
 
             _player.trainingsToday++;
-            _player.fatigue = Math.Min(100f, _player.fatigue + fatiguePerSession * (menu == TrainingMenu.Running ? 1.25f : 1f));
+            float rainy = w == SoccerIsland.World.Weather.Rain || w == SoccerIsland.World.Weather.Snow ? 1.25f : 1f;
+            _player.fatigue = Math.Min(100f, _player.fatigue + fatiguePerSession * (menu == TrainingMenu.Running ? 1.25f : 1f) * rainy);
             PlayerGrowth.AddExperience(_player, 5);
             r.fatigue = _player.fatigue;
             r.done = true;

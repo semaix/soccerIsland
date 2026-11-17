@@ -74,6 +74,9 @@ namespace SoccerIsland.Career
         public Hospital Hospital { get; }
         public PoliceBox Police { get; }
         public DailySchedule Schedule { get; }
+        public TravelEvents Travel { get; private set; }
+        /// <summary>直前の移動で起きた出来事。</summary>
+        public List<TravelEvent> LastTravelEvents { get; } = new List<TravelEvent>();
         public TimeOfDay Now => (TimeOfDay)Player.timeOfDay;
         /// <summary>
         /// true（既定）：同じ街の同じ場所にいる島民にしか話しかけられない。お店はその街の街なか、
@@ -141,6 +144,8 @@ namespace SoccerIsland.Career
             Training.atGround = () => !requirePresence || Here.place == IslandPlace.ClubGround;
             Training.isHere = id => !requirePresence || IsHere(id);
             Hospital.atHospital = () => !requirePresence || Here.place == IslandPlace.Hospital;
+            Training.weather = () => World.TodaysWeather;
+            Travel = new TravelEvents(Player, world.Population, Towns, rng);
             RefreshBlackMarketAccess();
         }
 
@@ -262,9 +267,13 @@ namespace SoccerIsland.Career
             if (!IslandMap.Exists(town, place, Player.homeTown)) return null;
             if (place == IslandPlace.BlackMarket && (!Player.blackMarketAccess || !BlackMarket.KnowsLocation || BlackMarket.CurrentTown != town)) return null;
             var reports = new List<CareerDayReport>();
+            LastTravelEvents.Clear();
             int cost = IslandMap.Distance(Player.currentTown, town);
             for (int i = 0; i < cost; i++)
             {
+                // 移動の途中で何か起きることがある（通り道の街：最後の1区間は行き先の街）
+                var ev = Travel.Roll(i == cost - 1 ? town : Player.currentTown, Now, World.TodaysWeather);
+                if (ev != null) LastTravelEvents.Add(ev);
                 var r = AdvanceTime();
                 if (r != null) reports.Add(r);
             }

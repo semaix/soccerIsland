@@ -8,6 +8,8 @@ namespace SoccerIsland.World
     {
         public List<Match> playedMatches = new List<Match>();
         public List<PurchaseRecord> purchases = new List<PurchaseRecord>();
+        /// <summary>嵐で延期になった試合。</summary>
+        public List<Match> postponed = new List<Match>();
         public DayReport population;
     }
 
@@ -54,14 +56,20 @@ namespace SoccerIsland.World
             Scheduler.EnsureScheduledThrough(db.currentDay + scheduleAheadDays);
         }
 
-        /// <summary>今日の試合を消化し、買い物を進める。日付が進む直前に呼ぶ。</summary>
+        public Weather TodaysWeather => WeatherSystem.WeatherOf(Population.Database.seed, Population.Database.currentDay);
+        public Weather WeatherOn(int day) => WeatherSystem.WeatherOf(Population.Database.seed, day);
+        public Season CurrentSeason => WeatherSystem.SeasonOf(Population.Database.currentDay);
+
+        /// <summary>今日の試合を消化し、買い物を進める。日付が進む直前に呼ぶ。嵐の日の試合は1週間延期。</summary>
         public WorldDayReport BeforeDayAdvance()
         {
             var report = new WorldDayReport();
             int today = Population.Database.currentDay;
+            bool storm = TodaysWeather == Weather.Storm;
             foreach (var m in State.MatchesOn(today))
             {
                 if (m.played) continue;
+                if (storm) { if (Postpone(m)) report.postponed.Add(m); continue; }
                 Matches.Play(m);
                 League.Record(m);
                 report.playedMatches.Add(m);
@@ -72,6 +80,27 @@ namespace SoccerIsland.World
 
         /// <summary>主人公の年齢（新人王の判定に使う）。Career 側が差し込む。</summary>
         public Func<int> protagonistAge = () => 99;
+
+        /// <summary>試合を延期する。出場メンバーがほかの試合と重ならない日まで、1週間ずつずらす。見つからなければ中止。</summary>
+        bool Postpone(Match m)
+        {
+            for (int weeks = 1; weeks <= 4; weeks++)
+            {
+                int day = m.day + 7 * weeks;
+                bool clash = false;
+                foreach (var other in State.MatchesOn(day))
+                {
+                    foreach (var id in m.homeLineup) if (other.Involves(id)) { clash = true; break; }
+                    if (!clash) foreach (var id in m.awayLineup) if (other.Involves(id)) { clash = true; break; }
+                    if (clash) break;
+                }
+                if (clash) continue;
+                m.day = day;
+                return true;
+            }
+            State.matches.Remove(m); // 中止
+            return false;
+        }
 
         /// <summary>日付が進んだ後に呼ぶ。先の試合予定を作り、古い試合を消す。年が変わればリーグの表彰。</summary>
         public void AfterDayAdvance()
