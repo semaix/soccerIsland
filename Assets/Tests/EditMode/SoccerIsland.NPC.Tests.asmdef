@@ -6,6 +6,7 @@
         "SoccerIsland.World",
         "SoccerIsland.Career",
         "SoccerIsland.Match",
+        "SoccerIsland.Field",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -20,6 +20,16 @@ namespace UnityEditor
     }
     public static class EditorGUI { public static void ProgressBar(Rect r, float v, string t) { } }
     public static class EditorApplication { public static Action delayCall; }
+    public class AssetImporter : UnityEngine.Object { }
+    public enum TextureImporterType { Default, Sprite }
+    public enum TextureImporterCompression { Uncompressed, Compressed }
+    public enum TextureImporterNPOTScale { None, ToNearest }
+    public class TextureImporter : AssetImporter
+    {
+        public TextureImporterType textureType; public FilterMode filterMode; public TextureImporterCompression textureCompression;
+        public bool mipmapEnabled, isReadable, alphaIsTransparency; public TextureImporterNPOTScale npotScale;
+    }
+    public class AssetPostprocessor { public string assetPath; public AssetImporter assetImporter; }
     [AttributeUsage(AttributeTargets.All)] public class MenuItemAttribute : Attribute { public MenuItemAttribute(string s) { } }
     [AttributeUsage(AttributeTargets.All)] public class InitializeOnLoadAttribute : Attribute { }
 }
