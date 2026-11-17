@@ -3,8 +3,8 @@ using SoccerIsland.NPC;
 namespace SoccerIsland.Match
 {
     /// <summary>
-    /// 主人公のコマンドを自動で選ぶ。「おまかせ」操作やテストに使う。
-    /// 性格づけ（見せたがり・オフサイド狙い・八百長中）を切り替えられる。
+    /// 自チームのコマンドを自動で選ぶ。「おまかせ」操作やテストに使う。
+    /// 性格づけ（見せたがり・オフサイド狙い・八百長中・消極的）を切り替えられる。
     /// </summary>
     public class AutoPilot : IMatchController
     {
@@ -24,26 +24,42 @@ namespace SoccerIsland.Match
 
         public MatchChoice Decide(MatchEngine engine, MatchPrompt p)
         {
-            return p.kind == PromptKind.Attack ? Attack(p) : Defend(p);
+            switch (p.kind)
+            {
+                case PromptKind.Attack: return Attack(p);
+                case PromptKind.Defend: return Defend(p);
+                case PromptKind.Keeper:
+                    if (throwing) return new MatchChoice(MatchCommand.Catch);
+                    if (p.options.Contains(MatchCommand.SpecialSave) && _rng.Chance(0.5f)) return new MatchChoice(MatchCommand.SpecialSave);
+                    return new MatchChoice(_rng.Chance(0.5f) ? MatchCommand.Catch : MatchCommand.Punch);
+                case PromptKind.Aerial:
+                    if (passive || throwing) return new MatchChoice(MatchCommand.Trap);
+                    return new MatchChoice(_rng.Chance(0.5f) ? MatchCommand.Header : _rng.Chance(0.5f) ? MatchCommand.Volley : MatchCommand.Trap);
+                default:
+                    return new MatchChoice(_rng.Chance(0.6f) ? MatchCommand.Clear : MatchCommand.Compete);
+            }
         }
 
         MatchChoice Attack(MatchPrompt p)
         {
-            if (passive) return Pick(p, MatchCommand.Keep, MatchCommand.BackPass);
+            bool me = p.actor.isProtagonist;
+            if (passive && me) return Pick(p, MatchCommand.Keep, MatchCommand.BackPass);
             if (throwing)
             {
-                if (!subtle && p.options.Contains(MatchCommand.MissOnPurpose)) return new MatchChoice(MatchCommand.MissOnPurpose);
-                if (!subtle && _rng.Chance(0.5f)) return Pick(p, MatchCommand.SloppyPass);
+                if (me && !subtle && p.options.Contains(MatchCommand.MissOnPurpose)) return new MatchChoice(MatchCommand.MissOnPurpose);
+                if (me && !subtle && _rng.Chance(0.5f)) return Pick(p, MatchCommand.SloppyPass);
                 return Pick(p, MatchCommand.BackPass, MatchCommand.Keep);
             }
             if (p.zone >= 5)
             {
                 if (p.options.Contains(MatchCommand.SpecialShot) && _rng.Chance(0.6f)) return new MatchChoice(MatchCommand.SpecialShot);
+                if (p.options.Contains(MatchCommand.Centering) && !me && _rng.Chance(0.3f)) return new MatchChoice(MatchCommand.Centering);
                 return new MatchChoice(MatchCommand.Shoot);
             }
             if (p.zone == 4 && _rng.Chance(0.35f)) return new MatchChoice(MatchCommand.Shoot);
-            if (showboat) return Pick(p, MatchCommand.FlairDribble);
+            if (showboat && me) return Pick(p, MatchCommand.FlairDribble);
             if (p.opponent == null) return new MatchChoice(MatchCommand.Dribble);
+            if (p.options.Contains(MatchCommand.SpecialDribble) && _rng.Chance(0.3f)) return new MatchChoice(MatchCommand.SpecialDribble);
             float r = _rng.Value;
             if (r < 0.45f) return Pick(p, MatchCommand.Pass);
             if (r < 0.85f) return Pick(p, MatchCommand.Dribble);
@@ -52,9 +68,11 @@ namespace SoccerIsland.Match
 
         MatchChoice Defend(MatchPrompt p)
         {
-            if (passive) return new MatchChoice(MatchCommand.Wait);
+            bool me = p.actor.isProtagonist;
+            if (passive && me) return new MatchChoice(MatchCommand.Wait);
             if (throwing && subtle) return new MatchChoice(_rng.Chance(0.5f) ? MatchCommand.PassCut : MatchCommand.Wait);
             if (trapper && p.options.Contains(MatchCommand.OffsideTrap) && _rng.Chance(0.7f)) return new MatchChoice(MatchCommand.OffsideTrap);
+            if (p.options.Contains(MatchCommand.SpecialTackle) && _rng.Chance(0.3f)) return new MatchChoice(MatchCommand.SpecialTackle);
             if (p.options.Contains(MatchCommand.Block) && _rng.Chance(0.4f)) return new MatchChoice(MatchCommand.Block);
             return new MatchChoice(_rng.Chance(0.6f) ? MatchCommand.Tackle : MatchCommand.PassCut);
         }

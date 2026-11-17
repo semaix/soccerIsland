@@ -62,6 +62,9 @@ namespace SoccerIsland.Career
 
         // ---- 選手としての能力（主人公は自分の能力を知っている） ----
         public Position position = Position.MF;
+        /// <summary>レベル（試合の経験値で上がる）。レベルで必殺技を覚える。</summary>
+        public int level = 1;
+        public int exp;
         public NPCAbilities abilities = DefaultAbilities();
 
         public static NPCAbilities DefaultAbilities()

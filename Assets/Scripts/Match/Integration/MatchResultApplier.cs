@@ -23,10 +23,18 @@ namespace SoccerIsland.Match
                 }
             }
 
-            // 主人公
+            // 主人公：知名度と経験値
             var pro = result.protagonist;
             if (pro != null)
+            {
                 career.Fame.RecordMatch(setup.category, pro.rating, pro.goals, pro.assists, setup.underground ? 0 : pro.beautifulSkills);
+                result.levelUps = PlayerGrowth.AddExperience(career.Player, result.protagonistExp);
+                foreach (var lv in result.levelUps)
+                {
+                    var m = SpecialMoveLibrary.ForProtagonistLevel(lv);
+                    if (m != null) result.learnedSpecials.Add(m);
+                }
+            }
 
             // 島民：いい試合をすれば話題に、ひどければ評価が下がる
             if (!setup.underground)

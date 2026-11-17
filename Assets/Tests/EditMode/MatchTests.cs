@@ -141,7 +141,7 @@ namespace SoccerIsland.NPC.Tests
         [Test]
         public void ProtagonistGetsCommandPrompts()
         {
-            var e = new MatchEngine(Setup(1));
+            var e = new MatchEngine(Setup(1)) { Mode = ControlMode.ProtagonistOnly };
             var kinds = new HashSet<PromptKind>();
             int prompts = 0;
             while (true)
@@ -152,8 +152,10 @@ namespace SoccerIsland.NPC.Tests
                 kinds.Add(p.kind);
                 Assert.IsTrue(p.actor.isProtagonist);
                 Assert.Throws<ArgumentException>(() => e.Choose(MatchCommand.MissOnPurpose)); // 八百長ミッションがないので選べない
-                e.Choose(p.kind == PromptKind.Attack ? (p.zone >= 5 ? MatchCommand.Shoot : MatchCommand.Pass) : MatchCommand.Tackle,
-                         p.passTargets.FirstOrDefault());
+                var cmd = p.kind == PromptKind.Attack ? (p.zone >= 5 ? MatchCommand.Shoot : MatchCommand.Pass)
+                        : p.kind == PromptKind.Defend ? MatchCommand.Tackle : p.options[0];
+                if (!p.options.Contains(cmd)) cmd = p.options[0];
+                e.Choose(cmd, p.passTargets.FirstOrDefault());
             }
             Assert.Greater(prompts, 5);
             Assert.IsTrue(kinds.Contains(PromptKind.Attack) && kinds.Contains(PromptKind.Defend));
@@ -217,8 +219,12 @@ namespace SoccerIsland.NPC.Tests
             public MatchChoice Decide(MatchEngine e, MatchPrompt p)
             {
                 e.ChangeTrust(_trust - e.Trust, "test");
-                if (p.kind == PromptKind.Attack) { attackPrompts++; return new MatchChoice(p.options.Contains(MatchCommand.Pass) ? MatchCommand.Pass : MatchCommand.Dribble); }
-                return new MatchChoice(MatchCommand.PassCut);
+                if (p.kind == PromptKind.Attack)
+                {
+                    if (p.actor.isProtagonist) attackPrompts++;
+                    return new MatchChoice(p.options.Contains(MatchCommand.Pass) ? MatchCommand.Pass : MatchCommand.Dribble);
+                }
+                return new MatchChoice(p.kind == PromptKind.Defend ? MatchCommand.PassCut : p.options[0]);
             }
         }
 
@@ -235,7 +241,7 @@ namespace SoccerIsland.NPC.Tests
             {
                 var p = e.Advance();
                 if (p == null) break;
-                Assert.Less(e.Minute, 31f, "足がつった後はボールに関われない");
+                if (e.Minute >= 31f) Assert.IsTrue(!p.actor.isProtagonist, "足がつった後、主人公はボールに関われない（味方への指示だけ）");
                 e.Choose(p.options[0], p.passTargets.FirstOrDefault());
                 if (e.Protagonist.cramped && !coached && e.CanCoach) coached = !e.Coach(CoachingCommand.GoForward).notAllowed;
             }
@@ -389,6 +395,128 @@ namespace SoccerIsland.NPC.Tests
             Assert.IsTrue(wm.played);
             Assert.AreEqual(1, result.missions.Count);
             Assert.AreEqual(1, c.Player.matchesPlayed);
+        }
+
+        // ---------------- キャプテン翼式（自チーム全員を操作） ----------------
+
+        class Recorder : IMatchController
+        {
+            public readonly List<MatchPrompt> prompts = new List<MatchPrompt>();
+            readonly AutoPilot _ap;
+            public Recorder(int seed) { _ap = new AutoPilot(seed); }
+            public MatchChoice Decide(MatchEngine e, MatchPrompt p) { prompts.Add(p); return _ap.Decide(e, p); }
+        }
+
+        [Test]
+        public void FullTeamModeCommandsEveryoneIncludingKeeperAndAerials()
+        {
+            var kinds = new HashSet<PromptKind>();
+            int teammatePrompts = 0;
+            for (int i = 0; i < 6; i++)
+            {
+                var rec = new Recorder(i);
+                var e = new MatchEngine(Setup(i)) { Controller = rec };
+                Assert.AreEqual(ControlMode.FullTeam, e.Mode, "既定はキャプテン翼式");
+                e.RunToEnd();
+                foreach (var p in rec.prompts)
+                {
+                    kinds.Add(p.kind);
+                    if (!p.actor.isProtagonist) teammatePrompts++;
+                    Assert.IsTrue(e.Home.players.Contains(p.actor), "相手チームの選手は操作しない");
+                    Assert.IsTrue(p.guts >= 0 && p.maxGuts > 0);
+                }
+            }
+            Assert.Greater(teammatePrompts, 100);
+            foreach (PromptKind k in Enum.GetValues(typeof(PromptKind)))
+                Assert.IsTrue(kinds.Contains(k), k + " の場面がない");
+        }
+
+        static MatchSetup PersonalityTeams(SoccerPersonality sp, int seed)
+        {
+            var rng = new SeededRandom(seed);
+            var home = MatchFactory.Generic("ホーム", 55, 11, rng);
+            foreach (var p in home.players) if (p.position != Position.GK) p.soccerPersonality = sp;
+            home.players.RemoveAt(home.players.Count - 1);
+            home.players.Add(MatchFactory.FromProtagonist(new PlayerState()));
+            var away = MatchFactory.Generic("アウェイ", 55, 11, rng);
+            return new MatchSetup { home = home, away = away, protagonistSide = Side.Home, seed = seed };
+        }
+
+        class AlwaysPass : IMatchController
+        {
+            public MatchChoice Decide(MatchEngine e, MatchPrompt p)
+            {
+                if (p.kind == PromptKind.Attack && p.options.Contains(MatchCommand.Pass)) return new MatchChoice(MatchCommand.Pass);
+                return new MatchChoice(p.options[0]);
+            }
+        }
+
+        [Test]
+        public void EgoistsIgnorePassOrdersButDevotedAlwaysObey()
+        {
+            int egoDisobey = 0, devotedDisobey = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                var e1 = new MatchEngine(PersonalityTeams(SoccerPersonality.Egoist, i + 1)) { Controller = new AlwaysPass() };
+                e1.RunToEnd();
+                egoDisobey += e1.Log.Count(x => x.type == MatchEventType.Disobey);
+                var e2 = new MatchEngine(PersonalityTeams(SoccerPersonality.Devoted, i + 1)) { Controller = new AlwaysPass() };
+                e2.RunToEnd();
+                devotedDisobey += e2.Log.Count(x => x.type == MatchEventType.Disobey);
+            }
+            Assert.Greater(egoDisobey, 5, "エゴイストはパスの指示を無視して自分で行く");
+            Assert.AreEqual(0, devotedDisobey, "献身的は必ず指示を聞く");
+        }
+
+        [Test]
+        public void SpecialMovesAndCutIns()
+        {
+            var db = Career().Population.Database;
+            var striker = db.npcs.First(n => n.abilities.shooting >= 70);
+            var mp = MatchFactory.FromNPC(striker, true, new SeededRandom(1));
+            Assert.IsTrue(mp.specials.Any(m => m.kind == SpecialKind.Shot), "シュートが得意な選手は必殺シュートを持つ");
+            Assert.AreEqual(mp.specials[0].name, MatchFactory.FromNPC(striker, true, new SeededRandom(9)).specials[0].name, "技は毎回同じ");
+
+            Assert.AreEqual(0, MatchFactory.ProtagonistSpecials(1).Count);
+            Assert.AreEqual("移住者シュート", MatchFactory.ProtagonistSpecials(3)[0].name);
+
+            int specialShots = 0, goalCutIns = 0, goals = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                var e = new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) };
+                e.RunToEnd();
+                specialShots += e.Log.Count(x => x.type == MatchEventType.SpecialShot && x.cutIn && !string.IsNullOrEmpty(x.moveName));
+                goals += e.Log.Count(x => x.type == MatchEventType.Goal);
+                goalCutIns += e.Log.Count(x => x.type == MatchEventType.Goal && x.cutIn);
+                Assert.IsTrue(!e.Log.Any(x => x.type == MatchEventType.Dribble && x.actor != null && x.actor.position == Position.GK), "キーパーはドリブルしない");
+            }
+            Assert.Greater(specialShots, 0);
+            Assert.AreEqual(goals, goalCutIns, "ゴールには必ずカットイン");
+        }
+
+        [Test]
+        public void ProtagonistLevelsUpAndLearnsSpecials()
+        {
+            for (int l = 1; l < 20; l++) Assert.Greater(PlayerGrowth.ExpToNext(l + 1), PlayerGrowth.ExpToNext(l));
+
+            var c = FreshCareer();
+            int shootBefore = c.Player.abilities.shooting;
+            var learned = new List<SpecialMove>();
+            var ms = NormalMatches(c);
+            for (int i = 0; i < 8; i++)
+            {
+                var s = MatchFactory.FromWorldMatch(c, ms[i], Side.Home, i + 1);
+                var session = new MatchSession(c, s);
+                var r = session.AutoPlay();
+                Assert.Greater(r.protagonistExp, 0);
+                learned.AddRange(r.learnedSpecials);
+            }
+            Assert.GreaterOrEqual(c.Player.level, 3);
+            Assert.Greater(c.Player.abilities.shooting, shootBefore);
+            Assert.IsTrue(learned.Any(m => m.name == "移住者シュート"), "レベル3で必殺シュートを覚える");
+
+            var pro = MatchFactory.FromProtagonist(c.Player);
+            Assert.IsTrue(pro.specials.Any(m => m.kind == SpecialKind.Shot));
         }
     }
 }

@@ -17,6 +17,8 @@ namespace SoccerIsland.Match.UnityIntegration
 
         public MissionKind mission = MissionKind.None;
         public Position protagonistPosition = Position.MF;
+        [Tooltip("ON：自チーム全員にコマンド（キャプテン翼式） / OFF：主人公だけ")]
+        public bool fullTeamControl = true;
 
         MatchSession _session;
         MatchPrompt _prompt;
@@ -82,7 +84,11 @@ namespace SoccerIsland.Match.UnityIntegration
                 if (t == MeetingTopic.TrustAce || t == MeetingTopic.BonusPromise) continue;
                 if (GUILayout.Button(TopicName(t))) ShowMeeting(_session.HoldMeeting(t));
             }
-            if (GUILayout.Button("キックオフ！", GUILayout.Height(40))) { _session.Kickoff(); _prompt = _session.Advance(); }
+            if (GUILayout.Button("キックオフ！", GUILayout.Height(40)))
+            {
+                _session.Kickoff().Mode = fullTeamControl ? ControlMode.FullTeam : ControlMode.ProtagonistOnly;
+                _prompt = _session.Advance();
+            }
             GUILayout.Label(_message);
         }
 
@@ -103,14 +109,22 @@ namespace SoccerIsland.Match.UnityIntegration
 
             _logScroll = GUILayout.BeginScrollView(_logScroll, GUILayout.Height(Screen.height * 0.45f));
             var log = _session.Log;
-            for (int i = Math.Max(0, log.Count - 60); i < log.Count; i++) GUILayout.Label($"{log[i].minute,2}' {log[i].text}");
+            for (int i = Math.Max(0, log.Count - 60); i < log.Count; i++)
+            {
+                var ev = log[i];
+                // カットイン（本番では顔アップ＋技名の2D演出に置き換える）
+                if (ev.cutIn) GUILayout.Label($"{ev.minute,2}' ★ {ev.text}", Big());
+                else GUILayout.Label($"{ev.minute,2}' {ev.text}");
+            }
             GUILayout.EndScrollView();
             _logScroll.y = float.MaxValue;
 
             if (_session.Current == MatchSession.Phase.Finished)
             {
                 var r = _session.Result;
-                GUILayout.Label($"試合終了　評価 {r.protagonist?.rating:0.0}　チームメイトの評価 {r.trust:0}");
+                GUILayout.Label($"試合終了　評価 {r.protagonist?.rating:0.0}　チームメイトの評価 {r.trust:0}　経験値 +{r.protagonistExp}");
+                foreach (var lv in r.levelUps) GUILayout.Label($"レベルアップ！ Lv.{lv}");
+                foreach (var m in r.learnedSpecials) GUILayout.Label($"必殺技「{m.name}」を覚えた！");
                 foreach (var m in r.missions) GUILayout.Label($"【{m.title}】{(m.status == MissionStatus.Success ? "成功" : "失敗")}　{m.detail}");
                 if (GUILayout.Button("閉じる")) _session = null;
                 return;
@@ -119,6 +133,7 @@ namespace SoccerIsland.Match.UnityIntegration
             if (_prompt != null)
             {
                 GUILayout.Label(_prompt.situation);
+                GUILayout.Label($"{_prompt.actor.name}　ガッツ {_prompt.guts}/{_prompt.maxGuts}　{MiniMap(_prompt.zone, _prompt.lane)}");
                 GUILayout.BeginHorizontal();
                 foreach (var c in _prompt.options)
                     if (GUILayout.Button(CommandName(c), GUILayout.Height(36)))
@@ -154,6 +169,14 @@ namespace SoccerIsland.Match.UnityIntegration
             foreach (CoachingCommand c in Enum.GetValues(typeof(CoachingCommand)))
                 if (GUILayout.Button(CoachName(c))) e.Coach(c, _coachTarget);
             GUILayout.EndHorizontal();
+        }
+
+        /// <summary>7ゾーン×3列の簡易ミニマップ（● がボール）。</summary>
+        static string MiniMap(int zone, int lane)
+        {
+            var sb = new System.Text.StringBuilder("[");
+            for (int z = 0; z <= 6; z++) sb.Append(z == zone ? (lane == 0 ? "↖" : lane == 2 ? "↙" : "●") : "・");
+            return sb.Append("]→").ToString();
         }
 
         static GUIStyle Big() => new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
@@ -192,6 +215,18 @@ namespace SoccerIsland.Match.UnityIntegration
                 case MatchCommand.PassCut: return "パスカット";
                 case MatchCommand.Block: return "ブロック";
                 case MatchCommand.OffsideTrap: return "オフサイドトラップ";
+                case MatchCommand.Centering: return "センタリング";
+                case MatchCommand.SpecialDribble: return "必殺ドリブル";
+                case MatchCommand.Header: return "ヘディング";
+                case MatchCommand.Volley: return "ボレー";
+                case MatchCommand.Trap: return "トラップ";
+                case MatchCommand.SpecialTackle: return "必殺タックル";
+                case MatchCommand.SpecialBlock: return "必殺ブロック";
+                case MatchCommand.Clear: return "クリア";
+                case MatchCommand.Compete: return "競る";
+                case MatchCommand.Catch: return "キャッチ";
+                case MatchCommand.Punch: return "パンチング";
+                case MatchCommand.SpecialSave: return "必殺セーブ";
                 default: return "様子を見る";
             }
         }

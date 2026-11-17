@@ -55,6 +55,11 @@ namespace SoccerIsland.Match
         /// <summary>主人公にボール・相手が集まりやすくする倍率（RPGとして主人公の出番を増やす）。</summary>
         public float protagonistSpotlight = 4f;
 
+        /// <summary>操作方式。既定は自チーム全員にコマンドを出すキャプテン翼式。</summary>
+        public ControlMode Mode { get; set; } = ControlMode.FullTeam;
+        /// <summary>ボールのある列：左(0)・中央(1)・右(2)。</summary>
+        public int Lane { get; private set; } = 1;
+
         public MatchSetup Setup { get; }
         public MatchTeam Home => Setup.home;
         public MatchTeam Away => Setup.away;
@@ -83,10 +88,28 @@ namespace SoccerIsland.Match
         bool _chainRewarded;
         MatchPlayer _lastPasser;    // アシスト判定
         PendingAction _pa;
+        ShotStage _shot;
+        AerialStage _aerial;
 
         class PendingAction
         {
             public MatchPlayer attacker, defender, target;
+            public MatchCommand? atk, def;
+        }
+
+        /// <summary>シュートがキーパーまで届いた場面。</summary>
+        class ShotStage
+        {
+            public MatchPlayer shooter, keeper;
+            public float power;
+            public MatchCommand? keeperCmd;
+        }
+
+        /// <summary>センタリングが上がった場面（空中戦）。</summary>
+        class AerialStage
+        {
+            public MatchPlayer crosser, receiver, defender;
+            public float cross;
             public MatchCommand? atk, def;
         }
 
@@ -132,6 +155,9 @@ namespace SoccerIsland.Match
                     continue;
                 }
 
+                if (_shot != null) { StepShot(); continue; }
+                if (_aerial != null) { StepAerial(); continue; }
+
                 if (_pa == null)
                 {
                     if (CheckClock()) continue;
@@ -158,10 +184,40 @@ namespace SoccerIsland.Match
                     AiAttack(_pa);
                 }
 
-                Resolve(_pa);
+                var pa = _pa;
                 _pa = null;
+                Resolve(pa);
             }
             return null;
+        }
+
+        void StepShot()
+        {
+            if (_shot.keeperCmd == null)
+            {
+                if (_shot.keeper != null && IsControllable(_shot.keeper)) { Pending = KeeperPrompt(); return; }
+                _shot.keeperCmd = AiKeeper(_shot.keeper, _shot.power);
+            }
+            var s = _shot;
+            _shot = null;
+            ResolveKeeper(s);
+        }
+
+        void StepAerial()
+        {
+            if (_aerial.def == null)
+            {
+                if (_aerial.defender != null && IsControllable(_aerial.defender)) { Pending = AerialDefendPrompt(); return; }
+                _aerial.def = AiAerialDefense(_aerial.defender);
+            }
+            if (_aerial.atk == null)
+            {
+                if (IsControllable(_aerial.receiver)) { Pending = AerialPrompt(); return; }
+                _aerial.atk = AiAerialAttack(_aerial.receiver);
+            }
+            var a = _aerial;
+            _aerial = null;
+            ResolveAerial(a);
         }
 
         /// <summary>最後まで進める（主人公はコントローラーか、いなければオートで）。</summary>
@@ -176,20 +232,101 @@ namespace SoccerIsland.Match
         {
             if (Pending == null) throw new InvalidOperationException("選択待ちではありません");
             if (!Pending.options.Contains(command)) throw new ArgumentException("選べないコマンド: " + command);
-            if (Pending.kind == PromptKind.Defend)
-            {
-                _pa.def = command;
-            }
-            else
-            {
-                _pa.atk = command;
-                if (IsPass(command))
-                    _pa.target = passTarget != null && Pending.passTargets.Contains(passTarget) ? passTarget : PickPassTarget(_pa.attacker, command);
-            }
+            var prompt = Pending;
             Pending = null;
+            switch (prompt.kind)
+            {
+                case PromptKind.Defend:
+                    _pa.def = Obey(prompt.actor, command, false);
+                    break;
+                case PromptKind.Attack:
+                    var cmd = Obey(prompt.actor, command, true);
+                    _pa.atk = cmd;
+                    if (IsPass(cmd) || cmd == MatchCommand.Centering)
+                        _pa.target = cmd == command && passTarget != null && prompt.passTargets.Contains(passTarget)
+                            ? passTarget : PickPassTarget(_pa.attacker, cmd);
+                    break;
+                case PromptKind.Keeper:
+                    _shot.keeperCmd = command;
+                    break;
+                case PromptKind.Aerial:
+                    _aerial.atk = command;
+                    break;
+                case PromptKind.AerialDefend:
+                    _aerial.def = command;
+                    break;
+            }
         }
 
-        bool IsControllable(MatchPlayer p) => p != null && p.isProtagonist && p.CanTouchBall;
+        /// <summary>
+        /// 指示を聞くかどうか。主人公は必ず従う。献身的は必ず聞く。
+        /// エゴイストはパスを命じられても自分で行くことがあり、センス的は地味な指示を嫌う。
+        /// チームメイトの評価（信頼）が低いと、誰でも聞かなくなる。
+        /// </summary>
+        MatchCommand Obey(MatchPlayer p, MatchCommand ordered, bool attacking)
+        {
+            if (p.isProtagonist || Mode == ControlMode.ProtagonistOnly) return ordered;
+            float disobey = Trust < 30f ? (30f - Trust) / 100f : 0f;
+            MatchCommand replacement = ordered;
+            string line = null;
+            switch (p.soccerPersonality)
+            {
+                case SoccerPersonality.Devoted:
+                    return ordered;
+                case SoccerPersonality.Egoist:
+                    if (attacking && Zone >= 3 && (IsPass(ordered) || ordered == MatchCommand.Keep || ordered == MatchCommand.Centering))
+                    {
+                        disobey += 0.35f;
+                        replacement = Zone >= 5 ? MatchCommand.Shoot : MatchCommand.Dribble;
+                        line = "うるせえ、俺が行く！";
+                    }
+                    break;
+                case SoccerPersonality.Sense:
+                case SoccerPersonality.Gifted:
+                    if (attacking && (ordered == MatchCommand.Keep || ordered == MatchCommand.BackPass))
+                    {
+                        disobey += 0.4f;
+                        replacement = MatchCommand.FlairDribble;
+                        line = "つまらない。こっちの方が面白い。";
+                    }
+                    break;
+                case SoccerPersonality.Hysteric:
+                    if (!attacking && p.tension > 80f && ordered != MatchCommand.Tackle)
+                    {
+                        disobey += 0.4f;
+                        replacement = MatchCommand.Tackle;
+                        line = "（カッとなって突っ込んだ！）";
+                    }
+                    break;
+                case SoccerPersonality.Fighter:
+                    if (!attacking && ordered == MatchCommand.Wait)
+                    {
+                        disobey += 0.5f;
+                        replacement = MatchCommand.Tackle;
+                        line = "見てるだけなんてできるか！";
+                    }
+                    break;
+            }
+            if (replacement == ordered && disobey > 0f)
+            {
+                // 信頼が低いだけの命令無視：自分の判断で動く
+                replacement = attacking ? (Zone >= 5 ? MatchCommand.Shoot : MatchCommand.Dribble) : MatchCommand.Tackle;
+                line = "……勝手にやらせてもらう。";
+            }
+            if (replacement == ordered || !_rng.Chance(disobey)) return ordered;
+            if (replacement == MatchCommand.Shoot && Zone < 3) replacement = MatchCommand.Dribble;
+            Emit(MatchEventType.Disobey, SideOf(p), p, null, $"{p.name}「{line}」（指示を無視した）");
+            var team = TeamOf(SideOf(p));
+            team.mood = Math.Max(-100f, team.mood - 2f);
+            return replacement;
+        }
+
+        bool IsControllable(MatchPlayer p)
+        {
+            if (p == null || !p.CanTouchBall || ProtagonistTeam == null) return false;
+            if (Mode == ControlMode.ProtagonistOnly) return p.isProtagonist;
+            return ProtagonistTeam.players.Contains(p);
+        }
 
         static bool IsPass(MatchCommand c) =>
             c == MatchCommand.Pass || c == MatchCommand.LongPass || c == MatchCommand.OneTwo || c == MatchCommand.BackPass || c == MatchCommand.SloppyPass;
@@ -238,6 +375,14 @@ namespace SoccerIsland.Match
             }
 
             if (Holder == null || !Holder.CanTouchBall) Holder = PickCarrier(TeamOf(Possession), Zone);
+            if (Holder != null && Holder.position == Position.GK)
+            {
+                // キーパーはボールを持ち上がらず、味方へフィードする
+                var keeper = Holder;
+                Zone = Math.Max(Zone, 1);
+                Holder = PickCarrier(TeamOf(Possession), Zone) ?? keeper;
+                if (Holder != keeper) Emit(MatchEventType.Pass, Possession, keeper, Holder, $"{keeper.name}から{Holder.name}へフィード");
+            }
             _pa = new PendingAction { attacker = Holder, defender = PickDefender(Opponent(Possession), Zone) };
         }
 
@@ -304,6 +449,7 @@ namespace SoccerIsland.Match
         {
             Possession = side;
             Zone = 3;
+            Lane = 1;
             Holder = PickCarrier(TeamOf(side), 3);
             _lastPasser = null;
             Emit(MatchEventType.Kickoff, side, Holder, null, $"{TeamOf(side).name}のキックオフ");
@@ -313,6 +459,7 @@ namespace SoccerIsland.Match
         {
             Possession = newSide;
             Zone = Math.Max(0, Math.Min(6, zone));
+            Lane = _rng.Range(0, 3);
             Holder = newHolder != null && newHolder.CanTouchBall ? newHolder : PickCarrier(TeamOf(newSide), Zone);
             _lastPasser = null;
         }
@@ -321,45 +468,94 @@ namespace SoccerIsland.Match
         // プロンプト（主人公の選択肢）
         // ==================================================================
 
+        MatchPrompt NewPrompt(PromptKind kind, MatchPlayer actor, MatchPlayer opponent) =>
+            new MatchPrompt { kind = kind, actor = actor, opponent = opponent, zone = Zone, minute = MinuteInt, lane = Lane, guts = actor.guts, maxGuts = actor.maxGuts };
+
+        bool HasSpecial(MatchPlayer p, SpecialKind kind)
+        {
+            var m = SpecialMoveLibrary.Find(p.specials, kind);
+            return m != null && p.guts >= m.gutsCost;
+        }
+
         MatchPrompt AttackPrompt()
         {
             var p = _pa.attacker;
-            var pr = new MatchPrompt { kind = PromptKind.Attack, actor = p, opponent = _pa.defender, zone = Zone, minute = MinuteInt };
+            var pr = NewPrompt(PromptKind.Attack, p, _pa.defender);
             pr.options.Add(MatchCommand.Dribble);
             pr.options.Add(MatchCommand.FlairDribble);
+            if (HasSpecial(p, SpecialKind.Dribble)) pr.options.Add(MatchCommand.SpecialDribble);
             pr.passTargets = PassTargets(p);
             if (pr.passTargets.Count > 0)
             {
                 pr.options.Add(MatchCommand.Pass);
                 if (Zone <= 4) pr.options.Add(MatchCommand.LongPass);
                 pr.options.Add(MatchCommand.OneTwo);
+                if (Zone >= 4 && Lane != 1) pr.options.Add(MatchCommand.Centering);
                 if (Zone >= 1) pr.options.Add(MatchCommand.BackPass);
             }
             if (Zone >= 3) pr.options.Add(MatchCommand.Shoot);
             if (Zone >= 4 && CanSpecial(p)) pr.options.Add(MatchCommand.SpecialShot);
             pr.options.Add(MatchCommand.Keep);
-            if (FixingActive)
+            if (FixingActive && p.isProtagonist)
             {
                 if (Zone >= 3) pr.options.Add(MatchCommand.MissOnPurpose);
                 pr.options.Add(MatchCommand.SloppyPass);
             }
             pr.situation = _pa.defender != null
-                ? $"{ZoneName(Zone)}　{_pa.defender.name}が立ちはだかる！"
-                : $"{ZoneName(Zone)}　前が空いている！";
+                ? $"{p.name}（{ZoneName(Zone)}・{LaneName(Lane)}）　{_pa.defender.name}が立ちはだかる！"
+                : $"{p.name}（{ZoneName(Zone)}・{LaneName(Lane)}）　前が空いている！";
             return pr;
         }
 
         MatchPrompt DefensePrompt()
         {
-            var pr = new MatchPrompt { kind = PromptKind.Defend, actor = _pa.defender, opponent = _pa.attacker, zone = Zone, minute = MinuteInt };
+            var d = _pa.defender;
+            var pr = NewPrompt(PromptKind.Defend, d, _pa.attacker);
             pr.options.Add(MatchCommand.Tackle);
+            if (HasSpecial(d, SpecialKind.Tackle)) pr.options.Add(MatchCommand.SpecialTackle);
             pr.options.Add(MatchCommand.PassCut);
             if (Zone >= 4) pr.options.Add(MatchCommand.Block);
-            if (Zone >= 2 && Zone <= 5) pr.options.Add(MatchCommand.OffsideTrap);
+            if (Zone >= 4 && HasSpecial(d, SpecialKind.Block)) pr.options.Add(MatchCommand.SpecialBlock);
+            if (Zone >= 2 && Zone <= 5 && d.position == Position.DF) pr.options.Add(MatchCommand.OffsideTrap);
             pr.options.Add(MatchCommand.Wait);
-            pr.situation = $"{_pa.attacker.name}がボールを持って向かってくる！（{ZoneName(Zone)}）";
+            pr.situation = $"{_pa.attacker.name}がボールを持って向かってくる！　{d.name}はどうする？（{ZoneName(Zone)}）";
             return pr;
         }
+
+        MatchPrompt KeeperPrompt()
+        {
+            var k = _shot.keeper;
+            var pr = NewPrompt(PromptKind.Keeper, k, _shot.shooter);
+            pr.options.Add(MatchCommand.Catch);
+            pr.options.Add(MatchCommand.Punch);
+            if (HasSpecial(k, SpecialKind.Save)) pr.options.Add(MatchCommand.SpecialSave);
+            pr.situation = $"{_shot.shooter.name}のシュートが来る！　キーパー{k.name}！";
+            return pr;
+        }
+
+        MatchPrompt AerialPrompt()
+        {
+            var r = _aerial.receiver;
+            var pr = NewPrompt(PromptKind.Aerial, r, _aerial.defender);
+            pr.options.Add(MatchCommand.Header);
+            pr.options.Add(MatchCommand.Volley);
+            pr.options.Add(MatchCommand.Trap);
+            pr.situation = $"{_aerial.crosser.name}のセンタリング！　{r.name}が飛び込む！";
+            return pr;
+        }
+
+        MatchPrompt AerialDefendPrompt()
+        {
+            var d = _aerial.defender;
+            var pr = NewPrompt(PromptKind.AerialDefend, d, _aerial.receiver);
+            pr.options.Add(MatchCommand.Clear);
+            pr.options.Add(MatchCommand.Compete);
+            pr.options.Add(MatchCommand.PassCut);
+            pr.situation = $"{_aerial.crosser.name}がセンタリングを上げた！　{d.name}、{_aerial.receiver.name}と競る！";
+            return pr;
+        }
+
+        static string LaneName(int lane) => lane == 0 ? "左サイド" : lane == 2 ? "右サイド" : "中央";
 
         static string ZoneName(int zone)
         {
@@ -383,10 +579,7 @@ namespace SoccerIsland.Match
             return list;
         }
 
-        public bool CanSpecial(MatchPlayer p) =>
-            p.guts >= GutsCost(MatchCommand.SpecialShot) &&
-            (p.stats.shooting >= 70 || p.stats.technique >= 75 || p.soccerPersonality == SoccerPersonality.God ||
-             p.soccerPersonality == SoccerPersonality.Gifted || p.soccerPersonality == SoccerPersonality.Sense && p.stats.shooting >= 60);
+        public bool CanSpecial(MatchPlayer p) => HasSpecial(p, SpecialKind.Shot);
 
         // ==================================================================
         // AI
@@ -402,45 +595,46 @@ namespace SoccerIsland.Match
 
             float shoot = Zone >= 6 ? 75 : Zone == 5 ? 55 : Zone == 4 ? 18 : 0;
             float dribble = 40, pass = 40, longPass = Zone <= 3 ? 10 : 0, oneTwo = 8, keep = 4;
+            float centering = Zone >= 4 && Lane != 1 ? 30 : 0;
 
             switch (p.soccerPersonality)
             {
-                case SoccerPersonality.Egoist: dribble *= 1.6f; pass *= 0.4f; shoot *= 1.4f; break;
-                case SoccerPersonality.Devoted: pass *= 1.5f; dribble *= 0.6f; shoot *= 0.6f; break;
+                case SoccerPersonality.Egoist: dribble *= 1.6f; pass *= 0.4f; shoot *= 1.4f; centering *= 0.3f; break;
+                case SoccerPersonality.Devoted: pass *= 1.5f; dribble *= 0.6f; shoot *= 0.6f; centering *= 1.5f; break;
                 case SoccerPersonality.Sense:
                 case SoccerPersonality.Gifted: oneTwo *= 2.5f; dribble *= 1.2f; break;
                 case SoccerPersonality.Fighter: dribble *= 1.2f; break;
             }
             switch (p.role)
             {
-                case PlayerRole.Support: pass *= 1.6f; dribble *= 0.6f; shoot *= 0.6f; break;
+                case PlayerRole.Support: pass *= 1.6f; dribble *= 0.6f; shoot *= 0.6f; centering *= 1.5f; break;
                 case PlayerRole.Free: dribble *= 1.3f; oneTwo *= 1.5f; break;
             }
             switch (instr)
             {
-                case TeamInstruction.GoForward: shoot *= 1.3f; longPass *= 1.5f; break;
+                case TeamInstruction.GoForward: shoot *= 1.3f; longPass *= 1.5f; centering *= 1.3f; break;
                 case TeamInstruction.DefendDeep: keep *= 3f; longPass *= 1.5f; break;
                 case TeamInstruction.PassAround: pass *= 1.8f; dribble *= 0.5f; break;
                 case TeamInstruction.TakeOn: dribble *= 1.8f; break;
                 case TeamInstruction.FeedProtagonist: pass *= 1.5f; break;
             }
-            if (pa.defender == null) { dribble *= 1.5f; }
+            if (pa.defender == null) dribble *= 1.5f;
             if (p.guts < GutsCost(MatchCommand.Shoot)) shoot = 0;
             var targets = PassTargets(p);
-            if (targets.Count == 0) { pass = longPass = oneTwo = 0; }
+            if (targets.Count == 0) pass = longPass = oneTwo = centering = 0;
 
-            var w = new[] { dribble, pass, longPass, oneTwo, shoot, keep };
-            int i = _rng.WeightedIndex(w);
+            int i = _rng.WeightedIndex(new[] { dribble, pass, longPass, oneTwo, shoot, keep, centering });
             switch (i)
             {
-                case 0: pa.atk = MatchCommand.Dribble; break;
+                case 0: pa.atk = HasSpecial(p, SpecialKind.Dribble) && pa.defender != null && _rng.Chance(0.3f) ? MatchCommand.SpecialDribble : MatchCommand.Dribble; break;
                 case 1: pa.atk = MatchCommand.Pass; break;
                 case 2: pa.atk = MatchCommand.LongPass; break;
                 case 3: pa.atk = MatchCommand.OneTwo; break;
                 case 4: pa.atk = CanSpecial(p) && _rng.Chance(0.4f) ? MatchCommand.SpecialShot : MatchCommand.Shoot; break;
-                default: pa.atk = MatchCommand.Keep; break;
+                case 5: pa.atk = MatchCommand.Keep; break;
+                default: pa.atk = MatchCommand.Centering; break;
             }
-            if (IsPass(pa.atk.Value)) pa.target = PickPassTarget(p, pa.atk.Value);
+            if (IsPass(pa.atk.Value) || pa.atk == MatchCommand.Centering) pa.target = PickPassTarget(p, pa.atk.Value);
         }
 
         MatchPlayer PickPassTarget(MatchPlayer from, MatchCommand cmd)
@@ -481,7 +675,37 @@ namespace SoccerIsland.Match
             if (d.position == Position.GK) { tackle = 30; cut = 20; block = 50; trap = 0; }
             if (d.guts < 40) { tackle *= 0.5f; wait *= 3; }
             int i = _rng.WeightedIndex(new[] { tackle, cut, block, trap, wait });
-            return i == 0 ? MatchCommand.Tackle : i == 1 ? MatchCommand.PassCut : i == 2 ? MatchCommand.Block : i == 3 ? MatchCommand.OffsideTrap : MatchCommand.Wait;
+            switch (i)
+            {
+                case 0: return HasSpecial(d, SpecialKind.Tackle) && _rng.Chance(0.3f) ? MatchCommand.SpecialTackle : MatchCommand.Tackle;
+                case 1: return MatchCommand.PassCut;
+                case 2: return HasSpecial(d, SpecialKind.Block) && _rng.Chance(0.4f) ? MatchCommand.SpecialBlock : MatchCommand.Block;
+                case 3: return MatchCommand.OffsideTrap;
+                default: return MatchCommand.Wait;
+            }
+        }
+
+        MatchCommand AiKeeper(MatchPlayer k, float shot)
+        {
+            if (k == null) return MatchCommand.Catch;
+            float save = k.stats.goalkeeping * 0.8f + k.stats.mental * 0.2f;
+            if (shot > save && HasSpecial(k, SpecialKind.Save) && _rng.Chance(0.6f)) return MatchCommand.SpecialSave;
+            return shot > save + 5f ? MatchCommand.Punch : MatchCommand.Catch;
+        }
+
+        MatchCommand AiAerialAttack(MatchPlayer r)
+        {
+            float header = 40 + (r.stats.physical - 50) * 0.8f, volley = 25 + (r.stats.technique - 50) * 0.8f, trap = 20;
+            if (r.soccerPersonality == SoccerPersonality.Devoted) trap *= 1.5f;
+            int i = _rng.WeightedIndex(new[] { Math.Max(1f, header), Math.Max(1f, volley), trap });
+            return i == 0 ? MatchCommand.Header : i == 1 ? MatchCommand.Volley : MatchCommand.Trap;
+        }
+
+        MatchCommand AiAerialDefense(MatchPlayer d)
+        {
+            if (d == null) return MatchCommand.Clear;
+            int i = _rng.WeightedIndex(new[] { 50f, 30f, 20f });
+            return i == 0 ? MatchCommand.Clear : i == 1 ? MatchCommand.Compete : MatchCommand.PassCut;
         }
 
         // ==================================================================
@@ -497,16 +721,50 @@ namespace SoccerIsland.Match
                 case MatchCommand.Pass: return 20;
                 case MatchCommand.LongPass: return 30;
                 case MatchCommand.OneTwo: return 40;
+                case MatchCommand.Centering: return 30;
                 case MatchCommand.Shoot: return 60;
                 case MatchCommand.SpecialShot: return 160;
+                case MatchCommand.SpecialDribble: return 120;
                 case MatchCommand.Keep: return 5;
                 case MatchCommand.BackPass: return 10;
+                case MatchCommand.Header: return 50;
+                case MatchCommand.Volley: return 60;
+                case MatchCommand.Trap: return 20;
                 case MatchCommand.Tackle: return 35;
+                case MatchCommand.SpecialTackle: return 110;
                 case MatchCommand.PassCut: return 25;
                 case MatchCommand.Block: return 35;
+                case MatchCommand.SpecialBlock: return 110;
                 case MatchCommand.OffsideTrap: return 20;
+                case MatchCommand.Clear: return 30;
+                case MatchCommand.Compete: return 35;
+                case MatchCommand.Catch: return 30;
+                case MatchCommand.Punch: return 30;
+                case MatchCommand.SpecialSave: return 140;
                 default: return 10;
             }
+        }
+
+        static SpecialKind? SpecialKindOf(MatchCommand c)
+        {
+            switch (c)
+            {
+                case MatchCommand.SpecialShot: return SpecialKind.Shot;
+                case MatchCommand.SpecialDribble: return SpecialKind.Dribble;
+                case MatchCommand.SpecialTackle: return SpecialKind.Tackle;
+                case MatchCommand.SpecialBlock: return SpecialKind.Block;
+                case MatchCommand.SpecialSave: return SpecialKind.Save;
+                default: return null;
+            }
+        }
+
+        /// <summary>必殺技を使うならその技（ガッツが足りなければ null）。</summary>
+        SpecialMove UseSpecial(MatchPlayer p, MatchCommand c)
+        {
+            var kind = SpecialKindOf(c);
+            if (!kind.HasValue || p == null) return null;
+            var m = SpecialMoveLibrary.Find(p.specials, kind.Value);
+            return m != null && p.guts >= m.gutsCost ? m : null;
         }
 
         float Perf(MatchPlayer p)
@@ -522,9 +780,16 @@ namespace SoccerIsland.Match
 
         float Roll(float v) => v + _rng.Gaussian(0f, rollStdDev);
 
-        static void Spend(MatchPlayer p, MatchCommand c)
+        void Spend(MatchPlayer p, MatchCommand c, SpecialMove special = null)
         {
-            if (p != null) p.guts = Math.Max(0, p.guts - GutsCost(c));
+            if (p == null) return;
+            int cost = special != null ? special.gutsCost : GutsCost(c);
+            p.guts = Math.Max(0, p.guts - cost);
+        }
+
+        static void Exp(MatchPlayer p, int amount)
+        {
+            if (p != null && p.isProtagonist) p.exp += amount;
         }
 
         void Resolve(PendingAction pa)
@@ -533,9 +798,16 @@ namespace SoccerIsland.Match
             var d = pa.defender;
             var cmd = pa.atk.Value;
             var def = pa.def.Value;
-            Spend(a, cmd);
-            if (d != null) Spend(d, def);
+            var atkSpecial = UseSpecial(a, cmd);
+            var defSpecial = UseSpecial(d, def);
+            // 必殺技のガッツが足りなければ通常技になる
+            if (SpecialKindOf(cmd).HasValue && atkSpecial == null) cmd = cmd == MatchCommand.SpecialShot ? MatchCommand.Shoot : MatchCommand.Dribble;
+            if (SpecialKindOf(def).HasValue && defSpecial == null) def = def == MatchCommand.SpecialBlock ? MatchCommand.Block : MatchCommand.Tackle;
+            Spend(a, cmd, atkSpecial);
+            if (d != null) Spend(d, def, defSpecial);
             a.lastTouchMinute = MinuteInt;
+            if (defSpecial != null)
+                Emit(MatchEventType.Info, Opponent(Possession).side, d, a, $"{d.name}「{defSpecial.shout}」　{defSpecial.name}！", 0f, true, defSpecial.name, defSpecial.shout);
 
             bool protagonistTeamAttacking = ProtagonistTeam != null && Possession == Setup.protagonistSide;
             if (protagonistTeamAttacking && !a.isProtagonist && _chainActions > 0) _chainActions--;
@@ -547,12 +819,16 @@ namespace SoccerIsland.Match
             {
                 case MatchCommand.Dribble:
                 case MatchCommand.FlairDribble:
-                    ResolveDribble(a, d, def, cmd == MatchCommand.FlairDribble);
+                case MatchCommand.SpecialDribble:
+                    ResolveDribble(a, d, def, cmd, atkSpecial, defSpecial);
                     break;
                 case MatchCommand.Pass:
                 case MatchCommand.LongPass:
                 case MatchCommand.OneTwo:
                     ResolvePass(a, pa.target, d, cmd, def);
+                    break;
+                case MatchCommand.Centering:
+                    ResolveCentering(a, pa.target, d, def);
                     break;
                 case MatchCommand.BackPass:
                     if (a.isProtagonist && Zone >= 4) Passive(a, "バックパス");
@@ -567,7 +843,7 @@ namespace SoccerIsland.Match
                 case MatchCommand.Shoot:
                 case MatchCommand.SpecialShot:
                 case MatchCommand.MissOnPurpose:
-                    ResolveShot(a, d, def, cmd, 0f);
+                    ResolveShot(a, d, def, cmd, 0f, atkSpecial, defSpecial);
                     break;
                 case MatchCommand.SloppyPass:
                     AddSuspicion(12f, "不自然なパスミス");
@@ -577,43 +853,51 @@ namespace SoccerIsland.Match
             }
         }
 
-        void ResolveDribble(MatchPlayer a, MatchPlayer d, MatchCommand def, bool flair)
+        void ResolveDribble(MatchPlayer a, MatchPlayer d, MatchCommand def, MatchCommand cmd, SpecialMove special, SpecialMove defSpecial)
         {
-            float att = (a.stats.dribbling * 0.5f + a.stats.technique * 0.25f + a.stats.speed * 0.25f) * Perf(a) - (flair ? 8f : 0f);
+            bool flair = cmd == MatchCommand.FlairDribble;
+            float att = (a.stats.dribbling * 0.5f + a.stats.technique * 0.25f + a.stats.speed * 0.25f) * Perf(a) - (flair ? 8f : 0f) + (special?.power ?? 0);
+            if (special != null)
+                Emit(MatchEventType.Dribble, Possession, a, d, $"{a.name}「{special.shout}」　{special.name}！", 0f, true, special.name, special.shout);
+
             bool won;
+            bool tackling = def == MatchCommand.Tackle || def == MatchCommand.SpecialTackle;
             if (d == null) won = true;
-            else if (def == MatchCommand.Tackle)
+            else if (tackling)
             {
                 if (CheckFoul(d, a)) return;
-                float tk = (d.stats.defense * 0.55f + d.stats.physical * 0.25f + d.stats.speed * 0.2f) * Perf(d);
+                float tk = (d.stats.defense * 0.55f + d.stats.physical * 0.25f + d.stats.speed * 0.2f) * Perf(d) + (defSpecial?.power ?? 0);
                 won = Roll(att) > Roll(tk);
                 if (!won) d.tacklesWon++;
             }
             else if (def == MatchCommand.Wait) won = _rng.Chance(0.75f);
-            else won = true; // パスカット・ブロック・トラップの読みが外れた
+            else won = true; // 読みが外れた
 
             if (!won)
             {
-                Emit(MatchEventType.DribbleBeaten, Possession, d, a, $"{d.name}のタックル！ ボールを奪った！");
+                Emit(MatchEventType.DribbleBeaten, Possession, d, a, $"{d.name}のタックル！ ボールを奪った！", 0f, defSpecial != null, defSpecial?.name, null);
                 if (d.isProtagonist) { ChangeTrust(5f, "タックル成功"); d.rating += 0.2f; }
+                Exp(d, 5);
                 LoseBall(a, d);
                 return;
             }
 
             int adv = def == MatchCommand.OffsideTrap ? 2 : 1;
             Zone = Math.Min(6, Zone + adv);
-            string how = flair ? "華麗なドリブル" : "ドリブル";
+            if (_rng.Chance(0.3f)) Lane = Math.Max(0, Math.Min(2, Lane + (_rng.Chance(0.5f) ? 1 : -1)));
+            string how = special != null ? special.name : flair ? "華麗なドリブル" : "ドリブル";
             Emit(MatchEventType.Dribble, Possession, a, d, d != null ? $"{a.name}の{how}！ {d.name}を抜いた！" : $"{a.name}、{how}で持ち上がる");
             if (def == MatchCommand.OffsideTrap && d != null)
                 Emit(MatchEventType.OffsideTrapFail, Opponent(Possession).side, d, a, "オフサイドトラップ失敗！ ドリブルで抜け出された！");
 
-            bool beautiful = d != null && (flair ? _rng.Chance(0.8f) : _rng.Chance(a.stats.technique / 140f));
+            bool beautiful = d != null && (special != null || (flair ? _rng.Chance(0.8f) : _rng.Chance(a.stats.technique / 140f)));
             if (beautiful)
             {
                 a.beautifulSkills++;
                 a.rating += 0.2f;
                 Emit(MatchEventType.BeautifulSkill, Possession, a, d, Setup.crowd >= 300 ? "観客席から大歓声！" : "綺麗な足技に見ている人が沸いた！");
             }
+            Exp(a, special != null ? 8 : flair ? 6 : 4);
 
             if (a.isProtagonist)
             {
@@ -636,7 +920,6 @@ namespace SoccerIsland.Match
             if (d != null && def == MatchCommand.OffsideTrap)
             {
                 if (ResolveOffsideTrap(a, target, d, pass)) return;
-                // 失敗：ラインの裏へ
                 Holder = cmd == MatchCommand.OneTwo ? a : target;
                 Zone = Math.Min(6, Zone + 3);
                 _lastPasser = cmd == MatchCommand.OneTwo ? null : a;
@@ -657,6 +940,7 @@ namespace SoccerIsland.Match
                 var stealer = d ?? PickDefender(Opponent(Possession), Zone);
                 Emit(MatchEventType.PassIntercepted, Possession, stealer, a, $"{stealer?.name}がパスカット！");
                 if (stealer != null && stealer.isProtagonist) { ChangeTrust(4f, "パスカット"); stealer.rating += 0.2f; }
+                Exp(stealer, 4);
                 LoseBall(a, stealer);
                 return;
             }
@@ -668,22 +952,125 @@ namespace SoccerIsland.Match
                     Emit(MatchEventType.OneTwo, Possession, a, target, $"{a.name}と{target.name}のワンツー！");
                     Holder = a;
                     _lastPasser = target;
+                    Exp(a, 3); Exp(target, 3);
                     break;
                 case MatchCommand.LongPass:
                     Zone = Math.Min(6, Zone + 2);
                     Emit(MatchEventType.LongPass, Possession, a, target, $"{a.name}のロングパス！ {target.name}が受ける");
                     Holder = target;
                     _lastPasser = a;
+                    Exp(a, 3);
                     break;
                 default:
                     Zone = Math.Min(6, Zone + 1);
                     Emit(MatchEventType.Pass, Possession, a, target, $"{a.name}から{target.name}へパス");
                     Holder = target;
                     _lastPasser = a;
+                    Exp(a, 2);
                     break;
             }
+            Lane = _rng.Range(0, 3);
             if (a.isProtagonist) { a.rating += 0.02f; _chainActions = Math.Max(_chainActions, 2); _chainRewarded = false; }
             if (Zone >= 5) MaybeChanceCreated(a);
+        }
+
+        /// <summary>センタリング。地上の守備者に読まれなければ、ゴール前で空中戦になる。</summary>
+        void ResolveCentering(MatchPlayer a, MatchPlayer target, MatchPlayer d, MatchCommand def)
+        {
+            if (target == null) { ResolveKeep(a, d, def); return; }
+            float cross = (a.stats.passing * 0.6f + a.stats.technique * 0.4f) * Perf(a);
+            if (d != null && def == MatchCommand.PassCut)
+            {
+                float cut = (d.stats.defense * 0.5f + d.stats.speed * 0.3f + d.stats.mental * 0.2f) * Perf(d);
+                if (Roll(cut) > Roll(cross + 4f))
+                {
+                    Emit(MatchEventType.PassIntercepted, Possession, d, a, $"{d.name}がセンタリングをカット！");
+                    Exp(d, 4);
+                    LoseBall(a, d);
+                    return;
+                }
+            }
+            Emit(MatchEventType.Centering, Possession, a, target, $"{a.name}、{LaneName(Lane)}からセンタリング！", 0f, true, null, "上げるぞ！");
+            Exp(a, 3);
+            if (a.isProtagonist) { _chainActions = Math.Max(_chainActions, 2); _chainRewarded = false; }
+            _lastPasser = a;
+
+            // 空中戦の守備者：DF を優先
+            var defTeam = Opponent(Possession);
+            var cands = new List<MatchPlayer>();
+            foreach (var p in defTeam.Active) if (p.CanTouchBall && p.position == Position.DF) cands.Add(p);
+            if (cands.Count == 0) foreach (var p in defTeam.Active) if (p.CanTouchBall && p.position != Position.GK) cands.Add(p);
+            _aerial = new AerialStage { crosser = a, receiver = target, defender = PickWeighted(cands), cross = cross };
+            Zone = 6;
+            Lane = 1;
+        }
+
+        void ResolveAerial(AerialStage s)
+        {
+            var r = s.receiver;
+            var d = s.defender;
+            Spend(r, s.atk.Value);
+            if (d != null) Spend(d, s.def.Value);
+            r.lastTouchMinute = MinuteInt;
+
+            float atk;
+            switch (s.atk.Value)
+            {
+                case MatchCommand.Header: atk = (r.stats.physical * 0.4f + r.stats.shooting * 0.3f + r.stats.speed * 0.3f) * Perf(r); break;
+                case MatchCommand.Volley: atk = (r.stats.shooting * 0.5f + r.stats.technique * 0.5f) * Perf(r) - 5f; break;
+                default: atk = (r.stats.technique * 0.6f + r.stats.physical * 0.4f) * Perf(r) + 5f; break;
+            }
+            atk += (s.cross - 50f) * 0.2f;
+
+            bool won = true;
+            if (d != null)
+            {
+                float dv;
+                switch (s.def.Value)
+                {
+                    case MatchCommand.Clear: dv = (d.stats.defense * 0.5f + d.stats.physical * 0.5f) * Perf(d); break;
+                    case MatchCommand.Compete: dv = (d.stats.physical * 0.7f + d.stats.speed * 0.3f) * Perf(d) + 3f; break;
+                    default: dv = (d.stats.defense * 0.4f + d.stats.speed * 0.4f + d.stats.mental * 0.2f) * Perf(d) - 4f; break;
+                }
+                won = Roll(atk) > Roll(dv);
+            }
+
+            if (!won)
+            {
+                string how = s.def.Value == MatchCommand.Clear ? "大きくクリア！" : s.def.Value == MatchCommand.Compete ? "競り勝った！" : "ボールをカット！";
+                Emit(MatchEventType.Clear, Opponent(Possession).side, d, r, $"{d.name}、{how}", 0f, true, null, null);
+                if (d.isProtagonist) { ChangeTrust(4f, "空中戦"); d.rating += 0.2f; }
+                Exp(d, 5);
+                if (s.def.Value == MatchCommand.Compete && _rng.Chance(0.4f))
+                {
+                    Emit(MatchEventType.Info, Possession, r, null, "こぼれ球を拾った！");
+                    Holder = r;
+                    Zone = 5;
+                    return;
+                }
+                Turnover(Opponent(Possession).side, d, s.def.Value == MatchCommand.Clear ? 2 : 1);
+                _chainActions = 0;
+                return;
+            }
+
+            Exp(r, 5);
+            if (r.isProtagonist) MaybeChanceCreated(r);
+            switch (s.atk.Value)
+            {
+                case MatchCommand.Header:
+                    Emit(MatchEventType.Header, Possession, r, d, $"{r.name}のヘディングシュート！", 0f, true, null, "うおおっ！");
+                    StartShot(r, (r.stats.shooting * 0.5f + r.stats.physical * 0.5f) * Perf(r) + 4f);
+                    break;
+                case MatchCommand.Volley:
+                    Emit(MatchEventType.Volley, Possession, r, d, $"{r.name}、ダイレクトボレー！", 0f, true, null, "合わせる！");
+                    StartShot(r, (r.stats.shooting * 0.7f + r.stats.technique * 0.3f) * Perf(r) + 10f);
+                    break;
+                default:
+                    Emit(MatchEventType.Keep, Possession, r, d, $"{r.name}、胸でトラップ！ ゴール前で持った！");
+                    Holder = r;
+                    Zone = 6;
+                    break;
+            }
         }
 
         /// <summary>オフサイドトラップ。成功したら true。</summary>
@@ -706,8 +1093,9 @@ namespace SoccerIsland.Match
             if (Roll(line) > Roll(run))
             {
                 OffsideTrapsSucceeded += defTeam == ProtagonistTeam ? 1 : 0;
-                Emit(MatchEventType.OffsideTrapSuccess, defTeam.side, d, target, $"オフサイドトラップ成功！ {target.name}はオフサイド！");
+                Emit(MatchEventType.OffsideTrapSuccess, defTeam.side, d, target, $"オフサイドトラップ成功！ {target.name}はオフサイド！", 0f, true, null, "今だ、上げろ！");
                 if (d.isProtagonist) { ChangeTrust(4f, "オフサイドトラップ"); d.rating += 0.15f; }
+                Exp(d, 4);
                 Turnover(defTeam.side, d, 1);
                 return true;
             }
@@ -719,7 +1107,7 @@ namespace SoccerIsland.Match
         void ResolveKeep(MatchPlayer a, MatchPlayer d, MatchCommand def)
         {
             if (a.isProtagonist && Zone >= 3) Passive(a, "キープ");
-            if (d != null && def == MatchCommand.Tackle)
+            if (d != null && (def == MatchCommand.Tackle || def == MatchCommand.SpecialTackle))
             {
                 if (CheckFoul(d, a)) return;
                 float keep = (a.stats.technique * 0.5f + a.stats.physical * 0.5f) * Perf(a) + 8f;
@@ -727,6 +1115,7 @@ namespace SoccerIsland.Match
                 if (Roll(tk) > Roll(keep))
                 {
                     Emit(MatchEventType.DribbleBeaten, Possession, d, a, $"{d.name}がボールを奪った！");
+                    Exp(d, 5);
                     LoseBall(a, d);
                     return;
                 }
@@ -734,7 +1123,8 @@ namespace SoccerIsland.Match
             Emit(MatchEventType.Keep, Possession, a, null, $"{a.name}、ボールをキープ");
         }
 
-        void ResolveShot(MatchPlayer a, MatchPlayer d, MatchCommand def, MatchCommand cmd, float bonus)
+        void ResolveShot(MatchPlayer a, MatchPlayer d, MatchCommand def, MatchCommand cmd, float bonus,
+                         SpecialMove special = null, SpecialMove defSpecial = null)
         {
             var defTeam = Opponent(Possession);
             a.shots++;
@@ -749,48 +1139,89 @@ namespace SoccerIsland.Match
             }
 
             float dist = Zone >= 6 ? 1f : Zone == 5 ? 0.9f : Zone == 4 ? 0.75f : Zone == 3 ? 0.55f : 0.35f;
-            bool special = cmd == MatchCommand.SpecialShot;
-            float shot = (a.stats.shooting * 0.7f + a.stats.technique * 0.3f) * Perf(a) * dist + (special ? 18f : 0f) + bonus;
-            Emit(special ? MatchEventType.SpecialShot : MatchEventType.Shot, Possession, a, null,
-                 special ? $"{a.name}の必殺シュート「{SpecialName(a)}」！" : $"{a.name}、シュート！");
-            if (special && Setup.crowd >= 100) { a.beautifulSkills++; }
-
-            if (d != null && def == MatchCommand.Block && d.position != Position.GK)
+            float shot = (a.stats.shooting * 0.7f + a.stats.technique * 0.3f) * Perf(a) * dist + (special?.power ?? 0) + bonus;
+            if (special != null)
             {
-                float blk = (d.stats.defense * 0.6f + d.stats.physical * 0.4f) * Perf(d);
+                Emit(MatchEventType.SpecialShot, Possession, a, null, $"{a.name}「{special.shout}」　必殺の{special.name}！", 0f, true, special.name, special.shout);
+                if (Setup.crowd >= 100) a.beautifulSkills++;
+            }
+            else Emit(MatchEventType.Shot, Possession, a, null, $"{a.name}、シュート！", 0f, true, null, null);
+            Exp(a, special != null ? 6 : 3);
+
+            bool blocking = def == MatchCommand.Block || def == MatchCommand.SpecialBlock;
+            if (d != null && blocking && d.position != Position.GK)
+            {
+                float blk = (d.stats.defense * 0.6f + d.stats.physical * 0.4f) * Perf(d) + (defSpecial?.power ?? 0);
                 if (Roll(blk) > Roll(shot + 10f))
                 {
-                    Emit(MatchEventType.Blocked, defTeam.side, d, a, $"{d.name}が体を張ってブロック！");
+                    Emit(MatchEventType.Blocked, defTeam.side, d, a, $"{d.name}が体を張ってブロック！", 0f, true, defSpecial?.name, null);
                     if (d.isProtagonist) { ChangeTrust(5f, "シュートブロック"); d.rating += 0.25f; }
+                    Exp(d, 5);
                     Turnover(defTeam.side, d, 1);
                     return;
                 }
                 shot *= 0.85f;
             }
 
-            float wide = 0.12f + (Zone < 4 ? 0.2f : 0f) - (special ? 0.08f : 0f);
+            float wide = 0.12f + (Zone < 4 ? 0.2f : 0f) - (special != null ? 0.08f : 0f);
             if (_rng.Chance(wide))
             {
                 Emit(MatchEventType.Missed, Possession, a, null, "シュートはゴールの外へ！");
                 Turnover(defTeam.side, defTeam.Keeper, 0);
                 return;
             }
+            StartShot(a, shot);
+        }
 
-            var k = defTeam.Keeper;
-            if (k != null)
+        /// <summary>シュートがキーパーまで届いた。キーパーの判断（キャッチ・パンチング・必殺セーブ）へ。</summary>
+        void StartShot(MatchPlayer shooter, float power)
+        {
+            var k = Opponent(Possession).Keeper;
+            if (k == null || !k.CanTouchBall) { Goal(shooter); return; }
+            _shot = new ShotStage { shooter = shooter, keeper = k, power = power };
+        }
+
+        void ResolveKeeper(ShotStage s)
+        {
+            var k = s.keeper;
+            var defTeam = Opponent(Possession);
+            var cmd = s.keeperCmd.Value;
+            var special = UseSpecial(k, cmd);
+            if (cmd == MatchCommand.SpecialSave && special == null) cmd = MatchCommand.Catch;
+            Spend(k, cmd, special);
+
+            float save = (k.stats.goalkeeping * 0.8f + k.stats.mental * 0.2f) * Perf(k);
+            if (cmd == MatchCommand.Punch) save += 7f;
+            if (special != null)
             {
-                float save = (k.stats.goalkeeping * 0.8f + k.stats.mental * 0.2f) * Perf(k);
-                Spend(k, MatchCommand.Block);
-                if (Roll(save) > Roll(shot + shotOffset))
+                save += special.power;
+                Emit(MatchEventType.Info, defTeam.side, k, s.shooter, $"{k.name}「{special.shout}」　{special.name}！", 0f, true, special.name, special.shout);
+            }
+
+            if (Roll(save) > Roll(s.power + shotOffset))
+            {
+                if (k.isProtagonist) k.rating += 0.3f;
+                Exp(k, 6);
+                if (s.shooter.isProtagonist) s.shooter.rating += 0.05f;
+                if (cmd == MatchCommand.Punch)
                 {
-                    Emit(MatchEventType.Save, defTeam.side, k, a, $"{k.name}がセーブ！");
-                    if (k.isProtagonist) k.rating += 0.3f;
-                    if (a.isProtagonist) a.rating += 0.05f;
-                    Turnover(defTeam.side, k, 0);
+                    Emit(MatchEventType.Punch, defTeam.side, k, s.shooter, $"{k.name}、パンチングで弾いた！", 0f, true, null, "させるか！");
+                    if (_rng.Chance(0.45f))
+                    {
+                        var rebound = PickCarrier(TeamOf(Possession), 5);
+                        Emit(MatchEventType.Info, Possession, rebound, null, $"こぼれ球！ {rebound?.name}が拾った！");
+                        Holder = rebound;
+                        Zone = 5;
+                        return;
+                    }
+                    Turnover(defTeam.side, PickCarrier(defTeam, 1), 1);
                     return;
                 }
+                Emit(MatchEventType.Catch, defTeam.side, k, s.shooter, $"{k.name}、がっちりキャッチ！", 0f, true, special?.name, null);
+                Turnover(defTeam.side, k, 0);
+                return;
             }
-            Goal(a);
+            Goal(s.shooter);
         }
 
         void Goal(MatchPlayer scorer)
@@ -802,7 +1233,9 @@ namespace SoccerIsland.Match
             scorer.rating += 1.0f;
             var assist = _lastPasser != null && _lastPasser != scorer ? _lastPasser : null;
             if (assist != null) { assist.assists++; assist.rating += 0.6f; }
-            Emit(MatchEventType.Goal, Possession, scorer, assist, $"ゴーーール！！ {scorer.name}！　{Home.score} - {Away.score}");
+            Emit(MatchEventType.Goal, Possession, scorer, assist, $"ゴーーール！！ {scorer.name}！　{Home.score} - {Away.score}", 0f, true, null, "よっしゃあああ！");
+            Exp(scorer, 20);
+            Exp(assist, 12);
 
             foreach (var p in team.Active) p.tension = Math.Min(100f, p.tension + 8f);
             foreach (var p in opp.Active) p.tension = Math.Max(0f, p.tension - 6f);
@@ -1060,12 +1493,20 @@ namespace SoccerIsland.Match
                 Protagonist.rating = Math.Max(3f, Math.Min(10f, Protagonist.rating + (Trust - 50f) / 100f));
             }
             foreach (var m in Setup.missions) r.missions.Add(m.Evaluate(this, r));
+            if (Protagonist != null)
+            {
+                int bonus = r.ProtagonistWon ? 30 : r.ProtagonistLost ? 5 : 15;
+                if (Setup.category == MatchCategory.IslandSelect || Setup.category == MatchCategory.RegionalDerby) bonus *= 2;
+                r.protagonistExp = Protagonist.exp + bonus;
+            }
             return r;
         }
 
-        void Emit(MatchEventType type, Side side, MatchPlayer actor, MatchPlayer other, string text, float value = 0f)
+        void Emit(MatchEventType type, Side side, MatchPlayer actor, MatchPlayer other, string text, float value = 0f,
+                  bool cutIn = false, string moveName = null, string shout = null)
         {
-            var e = new MatchEvent { type = type, minute = MinuteInt, side = side, actor = actor, other = other, text = text, value = value };
+            var e = new MatchEvent { type = type, minute = MinuteInt, side = side, actor = actor, other = other, text = text, value = value,
+                                     cutIn = cutIn, moveName = moveName, shout = shout };
             Log.Add(e);
             OnEvent?.Invoke(e);
             foreach (var m in Setup.missions) m.OnEvent(this, e);

@@ -18,6 +18,12 @@ namespace SoccerIsland.Match
         SpecialShot,   // 必殺シュート（気力を大きく使う）
         Keep,          // キープ（様子見）
         BackPass,      // バックパス
+        Centering,     // センタリング（サイドからゴール前へ上げる → 空中戦）
+        SpecialDribble,// 必殺ドリブル
+        // ---- 空中戦（攻撃） ----
+        Header,        // ヘディングシュート
+        Volley,        // ボレーシュート
+        Trap,          // トラップして持つ
         // ---- 八百長用（ミッション中だけ出る） ----
         MissOnPurpose, // わざと外す
         SloppyPass,    // わざとパスミス
@@ -27,6 +33,25 @@ namespace SoccerIsland.Match
         Block,         // ブロック（シュートを体で止める）
         OffsideTrap,   // オフサイドトラップ
         Wait,          // 様子を見る
+        SpecialTackle, // 必殺タックル
+        SpecialBlock,  // 必殺ブロック
+        // ---- 空中戦（守備） ----
+        Clear,         // クリア
+        Compete,       // 競り合う
+        // ---- キーパー ----
+        Catch,         // キャッチ
+        Punch,         // パンチング
+        SpecialSave,   // 必殺セーブ
+    }
+
+    /// <summary>
+    /// 操作方式。FullTeam は自チームのボール保持者・守備者・キーパー全員にコマンドを出す（キャプテン翼式）。
+    /// ProtagonistOnly は主人公が絡む場面だけ。
+    /// </summary>
+    public enum ControlMode
+    {
+        FullTeam,
+        ProtagonistOnly,
     }
 
     /// <summary>試合中のコーチング（指示）。</summary>
@@ -66,8 +91,11 @@ namespace SoccerIsland.Match
         public NPCAbilities stats;
         public Personality personality;
         public SoccerPersonality soccerPersonality;
+        public List<SpecialMove> specials = new List<SpecialMove>();
+        /// <summary>この試合で稼いだ経験値（主人公のみ使う）。</summary>
+        public int exp;
 
-        /// <summary>気力。行動するたびに減り、少ないと力が出ない。</summary>
+        /// <summary>ガッツ（気力）。行動するたびに減り、少ないと力が出ない。</summary>
         public int guts;
         public int maxGuts;
         /// <summary>テンション 0-100。高いほど力が出る。ムードメーカーのテンションはチーム全体に響く。</summary>
@@ -170,6 +198,8 @@ namespace SoccerIsland.Match
         Argument,
         Cramp,
         Suspicion,
+        Disobey,       // 指示を無視した
+        Centering, Header, Volley, Clear, Catch, Punch,
         Info,
     }
 
@@ -183,12 +213,21 @@ namespace SoccerIsland.Match
         public MatchPlayer other;
         public string text;
         public float value;
+        /// <summary>2D演出でカットイン（顔アップ・技名表示）を入れる場面か。</summary>
+        public bool cutIn;
+        /// <summary>カットインで出す技名（必殺技など）。</summary>
+        public string moveName;
+        /// <summary>カットインで叫ぶセリフ。</summary>
+        public string shout;
     }
 
     public enum PromptKind
     {
-        Attack,  // 主人公がボールを持った
-        Defend,  // 主人公の前に相手が来た
+        Attack,       // 自チームの選手がボールを持って相手と対決
+        Defend,       // 相手のボール保持者に自チームの選手が向かう
+        Keeper,       // 相手のシュート！ キーパーの対応
+        Aerial,       // 味方のセンタリング！ 空中で合わせる
+        AerialDefend, // 相手のセンタリング！ 空中で競る
     }
 
     /// <summary>主人公にコマンドを選ばせる場面。</summary>
@@ -202,6 +241,11 @@ namespace SoccerIsland.Match
         public List<MatchCommand> options = new List<MatchCommand>();
         public List<MatchPlayer> passTargets = new List<MatchPlayer>();
         public string situation;
+        /// <summary>左(0)・中央(1)・右(2)。2Dのミニマップ表示用。</summary>
+        public int lane;
+        /// <summary>選んでいる選手の残りガッツ。</summary>
+        public int guts;
+        public int maxGuts;
     }
 
     public enum MissionStatus { InProgress, Success, Failed }
@@ -224,6 +268,12 @@ namespace SoccerIsland.Match
         public bool fixingExposed;
         public List<MissionResult> missions = new List<MissionResult>();
         public List<MatchEvent> log = new List<MatchEvent>();
+        /// <summary>主人公がこの試合で稼いだ経験値。</summary>
+        public int protagonistExp;
+        /// <summary>結果反映で上がったレベル。</summary>
+        public List<int> levelUps = new List<int>();
+        /// <summary>レベルアップで覚えた必殺技。</summary>
+        public List<SpecialMove> learnedSpecials = new List<SpecialMove>();
 
         public bool ProtagonistWon => protagonistSide.HasValue &&
             (protagonistSide == Side.Home ? homeScore > awayScore : awayScore > homeScore);

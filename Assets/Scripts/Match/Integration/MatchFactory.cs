@@ -23,8 +23,21 @@ namespace SoccerIsland.Match
                 maxGuts = 300 + stats.stamina * 6,
                 tension = 55f + rng.Range(-10f, 10f) + (n.soccerPersonality == SoccerPersonality.MoodMaker ? 10f : 0f),
             };
+            p.specials = SpecialMoveLibrary.ForNPC(n, stats);
             p.guts = p.maxGuts;
             return p;
+        }
+
+        /// <summary>主人公がこれまでのレベルで覚えた必殺技。</summary>
+        public static List<SpecialMove> ProtagonistSpecials(int level)
+        {
+            var list = new List<SpecialMove>();
+            for (int l = 1; l <= level; l++)
+            {
+                var m = SpecialMoveLibrary.ForProtagonistLevel(l);
+                if (m != null) list.Add(m);
+            }
+            return list;
         }
 
         public static MatchPlayer FromProtagonist(PlayerState s)
@@ -33,7 +46,8 @@ namespace SoccerIsland.Match
             {
                 npcId = -1, name = s.name, isProtagonist = true, position = s.position, stats = s.abilities.Clone(),
                 personality = Personality.Extrovert, soccerPersonality = SoccerPersonality.Devoted,
-                maxGuts = 300 + s.abilities.stamina * 6, tension = 65f,
+                maxGuts = 300 + s.abilities.stamina * 6 + s.level * 10, tension = 65f,
+                specials = ProtagonistSpecials(s.level),
             };
             p.guts = p.maxGuts;
             return p;
