@@ -98,6 +98,10 @@ namespace SoccerIsland.Match.UnityIntegration
         {
             var db = c.Population.Database;
             GUILayout.Label($"今いる場所：{c.Here}（{DailySchedule.Label(c.Now)}）");
+            var fest = c.CurrentFestival;
+            if (fest != null && GUILayout.Button($"「{fest.name}」に参加する")) Say(c.JoinFestival().text);
+            foreach (var f in c.Schedule.calendar.On(c.Population.Database.currentDay))
+                GUILayout.Label($"今日の行事：{f.name}（{NPCLabels.Of(f.town)}・{IslandMap.PlaceLabel(f.place)}・{DailySchedule.Label(f.time)}）");
             DrawMove(c);
 
             GUILayout.BeginHorizontal();

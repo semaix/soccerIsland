@@ -19,6 +19,9 @@ namespace SoccerIsland.Career
         // 街ごとの主人公の評判（Town の順）
         public List<int> townReputation = new List<int>();
 
+        // 参加したお祭り（"日:種類"）
+        public List<string> festivalsJoined = new List<string>();
+
         // 漂流者
         public List<int> registeredCastaways = new List<int>();
     }

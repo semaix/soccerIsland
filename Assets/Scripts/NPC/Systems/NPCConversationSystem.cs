@@ -253,6 +253,7 @@ namespace SoccerIsland.NPC
                 case RelationType.Pupil: return NPCInfoFlags.Talent | NPCInfoFlags.GrowthHint;
                 case RelationType.Boss:
                 case RelationType.Subordinate: return NPCInfoFlags.UndergroundSecret | NPCInfoFlags.Occupation;
+                case RelationType.Spouse: return NPCInfoFlags.Age | NPCInfoFlags.Occupation | NPCInfoFlags.Personality;
                 default: return NPCInfoFlags.None;
             }
         }

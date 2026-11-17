@@ -104,6 +104,7 @@ namespace SoccerIsland.NPC
                 case RelationType.Mentor: return "師匠";
                 case RelationType.Pupil: return "弟子";
                 case RelationType.Crush: return "片思い";
+                case RelationType.Spouse: return "夫婦";
                 default: return r.ToString();
             }
         }

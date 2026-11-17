@@ -162,6 +162,8 @@ namespace SoccerIsland.NPC
                     return $"……{name}さんには逆らえない。この街の裏を仕切ってる人だ。";
                 case RelationType.Subordinate:
                     return $"{name}？ ああ、うちの若いのだ。";
+                case RelationType.Spouse:
+                    return tone > 0 ? $"{name}と結婚してるんだ。毎朝ボールを蹴ってから仕事に行くんだよ。" : $"{name}？ ……うちの連れ合いだよ。";
                 default:
                     return $"{name}って知ってる？";
             }

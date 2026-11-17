@@ -25,6 +25,8 @@ namespace SoccerIsland.Career
         public NewspaperIssue newspaper;
         public List<EconomyEvent> economyEvents = new List<EconomyEvent>();
         public List<FameEvent> fameEvents = new List<FameEvent>();
+        /// <summary>島民同士の関係の変化（月に1回。なければ null）。</summary>
+        public List<RelationChange> relationChanges;
         /// <summary>この日の朝にかかってきた電話。</summary>
         public List<IncomingCall> incomingCalls = new List<IncomingCall>();
     }
@@ -75,6 +77,9 @@ namespace SoccerIsland.Career
         public PoliceBox Police { get; }
         public DailySchedule Schedule { get; }
         public TravelEvents Travel { get; private set; }
+        public FestivalSystem Festivals { get; private set; }
+        public RelationshipDynamics Relationships { get; private set; }
+        List<RelationChange> _pendingRelationChanges;
         /// <summary>直前の移動で起きた出来事。</summary>
         public List<TravelEvent> LastTravelEvents { get; } = new List<TravelEvent>();
         public TimeOfDay Now => (TimeOfDay)Player.timeOfDay;
@@ -146,6 +151,26 @@ namespace SoccerIsland.Career
             Hospital.atHospital = () => !requirePresence || Here.place == IslandPlace.Hospital;
             Training.weather = () => World.TodaysWeather;
             Travel = new TravelEvents(Player, world.Population, Towns, rng);
+            Schedule.calendar = new IslandCalendar(db.seed);
+            Newspaper.calendar = Schedule.calendar;
+            Relationships = new RelationshipDynamics(db, world.Population.Knowledge, rng);
+            Relationships.excludedFromMarriage = id => { var r = Romance.State.Get(id); return r != null && (r.status == RomanceStatus.Partner || r.love >= 50); };
+            Festivals = new FestivalSystem(Player, world.Population, Schedule.calendar, Fame, Towns, Inventory, Events);
+            // お祭りの日は打ち解けやすい
+            var townAffinity = world.Population.Conversation.affinityModifier;
+            world.Population.Conversation.affinityModifier = (npc, gain) =>
+            {
+                int g = townAffinity != null ? townAffinity(npc, gain) : gain;
+                var f = Schedule.calendar.At(db.currentDay, Now, Player.currentTown, (IslandPlace)Player.currentPlace);
+                return f != null ? (int)Math.Round(g * f.affinityBonus) : g;
+            };
+            var townFans = Fans.townMultiplier;
+            Fans.townMultiplier = t =>
+            {
+                float m = townFans != null ? townFans(t) : 1f;
+                var f = Schedule.calendar.At(db.currentDay, Now, Player.currentTown, (IslandPlace)Player.currentPlace);
+                return f != null ? m * f.fanBonus : m;
+            };
             RefreshBlackMarketAccess();
         }
 
@@ -184,6 +209,7 @@ namespace SoccerIsland.Career
             Betting.DrawIfDue();
             Bank.TickDay();
             if (Population.Database.currentDay % 30 == 29) Scouting.Payroll();
+            _pendingRelationChanges = Population.Database.currentDay % 30 == 10 ? Relationships.RunMonth() : null;
         }
 
         /// <summary>日付が進んだ後に呼ぶ。朝刊を発行する。</summary>
@@ -200,7 +226,11 @@ namespace SoccerIsland.Career
                 economyEvents = new List<EconomyEvent>(_economyEvents),
                 fameEvents = new List<FameEvent>(_fameEvents),
             };
+            Newspaper.relationChanges = _pendingRelationChanges;
             report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents);
+            report.relationChanges = _pendingRelationChanges;
+            Newspaper.relationChanges = null;
+            _pendingRelationChanges = null;
             report.incomingCalls = Phone.IncomingCalls();
             _economyEvents.Clear();
             _fameEvents.Clear();
@@ -246,6 +276,12 @@ namespace SoccerIsland.Career
         }
 
         public bool IsHere(int npcId) => Locate(npcId).Same(Here);
+
+        /// <summary>今いる場所で開かれているお祭り（なければ null）。</summary>
+        public Festival CurrentFestival => Schedule.calendar.At(Population.Database.currentDay, Now, Player.currentTown, (IslandPlace)Player.currentPlace);
+
+        /// <summary>今いる場所のお祭りに参加する。</summary>
+        public FestivalResult JoinFestival() => Festivals.Join(PeopleHere);
 
         /// <summary>今いる場所にいる島民。</summary>
         public List<NPCData> PeopleHere()

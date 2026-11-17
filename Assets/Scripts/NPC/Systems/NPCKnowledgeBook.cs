@@ -100,6 +100,22 @@ namespace SoccerIsland.NPC
             return true;
         }
 
+        /// <summary>知っている関係が変わったとき（和解・決別・結婚）、相関図の線も描き換える。</summary>
+        public bool UpdateRelationType(int a, int b, RelationType type)
+        {
+            for (int i = 0; i < knownRelations.Count; i++)
+            {
+                var r = knownRelations[i];
+                if ((r.fromId == a && r.toId == b) || (r.fromId == b && r.toId == a))
+                {
+                    r.type = type;
+                    knownRelations[i] = r;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>相関図描画用：あるNPCにつながる既知の線。</summary>
         public List<KnownRelation> RelationsOf(int npcId)
         {

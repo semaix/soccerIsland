@@ -103,6 +103,7 @@ namespace SoccerIsland.NPC
         Mentor,     // 相手が自分の師匠
         Pupil,      // 相手が自分の弟子
         Crush,      // 片思い（2周目以降の恋愛要素用）
+        Spouse,     // 結婚相手
     }
 
     /// <summary>会話で判明する情報。プレイヤーの「知っていること」をビットで管理する。</summary>

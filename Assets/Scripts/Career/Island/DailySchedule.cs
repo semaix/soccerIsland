@@ -35,6 +35,8 @@ namespace SoccerIsland.Career
     {
         readonly NPCDatabase _db;
         readonly WorldState _world;
+        /// <summary>年中行事（お祭りの日は島民が集まる）。</summary>
+        public IslandCalendar calendar;
 
         public DailySchedule(NPCDatabase db, WorldState world)
         {
@@ -97,6 +99,8 @@ namespace SoccerIsland.Career
         /// <summary>島民が今いる街と場所。職場は職業で街が決まる（オフィス街は天峰台、病院は勇心町…）。</summary>
         public IslandLocation Locate(NPCData n, int day, TimeOfDay t, int blackMarketTown = -1)
         {
+            var fest = calendar?.Attending(n, day, t);
+            if (fest != null && WhereIs(n, day, t) != IslandPlace.Hospital) return new IslandLocation(fest.town, fest.place);
             var place = WhereIs(n, day, t);
             Town town = n.hometown;
             switch (place)

@@ -23,6 +23,10 @@ namespace SoccerIsland.Career
         readonly MarketValueSystem _market;
         readonly PopularityVote _vote;
         readonly SeededRandom _rng;
+        /// <summary>年中行事（IslandCareer が差し込む）。</summary>
+        public IslandCalendar calendar;
+        /// <summary>島民同士の関係の変化（IslandCareer がその日だけ渡す）。</summary>
+        public List<RelationChange> relationChanges;
 
         public SoccerNewspaper(NPCDatabase db, WorldState world, PlayerState player, EconomyState economy,
                                MarketValueSystem market, PopularityVote vote, SeededRandom rng)
@@ -44,6 +48,11 @@ namespace SoccerIsland.Career
 
             if (world != null) { AddMatches(a, world.playedMatches); AddShop(a, world.purchases); AddPostponed(a, world.postponed); }
             AddForecast(a, issue.day);
+            if (relationChanges != null) AddRelationChanges(a, relationChanges);
+            if (calendar != null)
+                foreach (var f in calendar.On(issue.day))
+                    a.Add(new Article { category = ArticleCategory.Island, priority = 42,
+                        title = $"今日は「{f.name}」", body = $"{f.description}（{NPCLabels.Of(f.town)}・{DailySchedule.Label(f.time)}）" });
             if (population != null) { AddMarket(a, population.headlines); AddLife(a, population.lifeEvents); }
             if (economyEvents != null) foreach (var e in economyEvents) AddEconomy(a, e);
             if (fameEvents != null) foreach (var e in fameEvents) AddFame(a, e);
@@ -120,6 +129,42 @@ namespace SoccerIsland.Career
             int best = -1;
             for (int i = 0; i < count.Length; i++) if (count[i] > 0 && (best < 0 || count[i] > count[best])) best = i;
             return best;
+        }
+
+        // ---------------- 島民の人間関係 ----------------
+
+        void AddRelationChanges(List<Article> a, List<RelationChange> changes)
+        {
+            int count = 0;
+            foreach (var c in changes)
+            {
+                if (count >= 3 || c.kind == RelationChangeKind.BecameFriends) continue;
+                var x = _db.Get(c.a); var y = _db.Get(c.b);
+                if (x == null || y == null) continue;
+                int fame = Math.Max(x.fame, y.fame);
+                switch (c.kind)
+                {
+                    case RelationChangeKind.Married:
+                        a.Add(new Article { category = ArticleCategory.Gossip, priority = 40 + fame / 3, npcIds = { x.id, y.id },
+                            title = $"{x.FullName}と{y.FullName}が結婚", body = $"{NPCLabels.Of(x.occupation)}と{NPCLabels.Of(y.occupation)}のカップル。式は{NPCLabels.Of(x.hometown)}で挙げる予定。" });
+                        _market.AddHype(x, 0.05f, "married"); _market.AddHype(y, 0.05f, "married");
+                        count++;
+                        break;
+                    case RelationChangeKind.Reconciled:
+                        if (fame < 25) break;
+                        a.Add(new Article { category = ArticleCategory.Gossip, priority = 30 + fame / 4, npcIds = { x.id, y.id },
+                            title = $"犬猿の仲だった{x.FullName}と{y.FullName}が和解", body = "居酒屋で肩を組む姿が目撃された。「昔のことは水に流した」。" });
+                        count++;
+                        break;
+                    case RelationChangeKind.MentorSplit:
+                        if (fame < 20) break;
+                        a.Add(new Article { category = ArticleCategory.Gossip, priority = 35 + fame / 4, npcIds = { x.id, y.id },
+                            title = $"師匠を超えた？ {x.FullName}、{y.FullName}と決別", body = "「もう教わることはない」と弟子。師匠は「天狗になるな」と一喝。" });
+                        _market.AddHype(x, 0.04f, "mentor_split");
+                        count++;
+                        break;
+                }
+            }
         }
 
         // ---------------- 天気 ----------------
