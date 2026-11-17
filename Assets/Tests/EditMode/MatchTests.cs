@@ -518,5 +518,80 @@ namespace SoccerIsland.NPC.Tests
             var pro = MatchFactory.FromProtagonist(c.Player);
             Assert.IsTrue(pro.specials.Any(m => m.kind == SpecialKind.Shot));
         }
+
+        // ---------------- フォーメーション・作戦 ----------------
+
+        [Test]
+        public void FormationAssignsSlotsAndFlagsOutOfPosition()
+        {
+            var t = MatchFactory.Generic("テスト", 55, 11, new SeededRandom(2));
+            foreach (var p in t.players) p.RememberNaturalPosition();
+            FormationSystem.Apply(t, Formation.F541);
+            Assert.AreEqual(5, t.players.Count(p => p.position == Position.DF));
+            Assert.AreEqual(4, t.players.Count(p => p.position == Position.MF));
+            Assert.AreEqual(1, t.players.Count(p => p.position == Position.FW));
+            Assert.AreEqual(1, t.players.Count(p => p.position == Position.GK));
+            Assert.IsTrue(t.players.Any(p => p.OutOfPosition), "FWが余るので誰かが本来と違う位置に入る");
+
+            FormationSystem.Apply(t, Formation.F442);
+            Assert.AreEqual(2, t.players.Count(p => p.position == Position.FW));
+            Assert.IsTrue(!t.players.Any(p => p.OutOfPosition), "4-4-2 なら全員本来の位置");
+        }
+
+        static int CountEvents(TeamTactic tactic, MatchEventType type, out int goalsFor, out int goalsAgainst)
+        {
+            int n = 0; goalsFor = 0; goalsAgainst = 0;
+            for (int i = 0; i < 12; i++)
+            {
+                var s = PersonalityTeams(SoccerPersonality.MoodMaker, i + 1);
+                FormationSystem.Apply(s.home, Formation.F442);
+                s.home.tactic = tactic;
+                s.autoSelectCpuTactics = false;
+                var e = new MatchEngine(s) { Controller = new TacticFollower() };
+                var r = e.RunToEnd();
+                n += r.log.Count(x => x.type == type && x.side == Side.Home);
+                goalsFor += r.homeScore;
+                goalsAgainst += r.awayScore;
+            }
+            return n;
+        }
+
+        /// <summary>作戦に沿ったコマンドを選ぶ（CPUと同じ傾向）。</summary>
+        class TacticFollower : IMatchController
+        {
+            readonly AutoPilot _ap = new AutoPilot(5);
+            public MatchChoice Decide(MatchEngine e, MatchPrompt p)
+            {
+                var team = e.ProtagonistTeam;
+                if (p.kind == PromptKind.Attack && team.tactic == TeamTactic.WingAttack && p.options.Contains(MatchCommand.Centering)) return new MatchChoice(MatchCommand.Centering);
+                if (p.kind == PromptKind.Defend && team.tactic == TeamTactic.ParkTheBus && p.options.Contains(MatchCommand.Block)) return new MatchChoice(MatchCommand.Block);
+                return _ap.Decide(e, p);
+            }
+        }
+
+        [Test]
+        public void TacticsChangeHowTheTeamPlays()
+        {
+            int wingCrosses = CountEvents(TeamTactic.WingAttack, MatchEventType.Centering, out _, out _);
+            int balancedCrosses = CountEvents(TeamTactic.Balanced, MatchEventType.Centering, out _, out _);
+            Assert.Greater(wingCrosses, balancedCrosses, "サイド攻撃はセンタリングが増える");
+
+            CountEvents(TeamTactic.ParkTheBus, MatchEventType.Goal, out _, out int conceded);
+            CountEvents(TeamTactic.Balanced, MatchEventType.Goal, out _, out int concededBalanced);
+            Assert.Less(conceded, concededBalanced, "ゴール前を固めると失点が減る");
+        }
+
+        [Test]
+        public void TacticsHaveFansAndHaters()
+        {
+            var ego = P(Personality.Extrovert, SoccerPersonality.Egoist);
+            var fighter = P(Personality.Extrovert, SoccerPersonality.Fighter);
+            var t = new MatchTeam { players = { ego, fighter } };
+            var r = FormationSystem.SetTactic(t, TeamTactic.ParkTheBus);
+            Assert.Less(ego.tension, 60f, "エゴイストは守備的な作戦が嫌い");
+            FormationSystem.SetTactic(t, TeamTactic.HighPress);
+            Assert.Greater(fighter.tension, 60f, "ファイターはプレスが好き");
+            Assert.AreEqual(TeamTactic.HighPress, t.tactic);
+        }
     }
 }

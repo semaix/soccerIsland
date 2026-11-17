@@ -24,6 +24,7 @@ namespace SoccerIsland.Match
                 tension = 55f + rng.Range(-10f, 10f) + (n.soccerPersonality == SoccerPersonality.MoodMaker ? 10f : 0f),
             };
             p.specials = SpecialMoveLibrary.ForNPC(n, stats);
+            p.RememberNaturalPosition();
             p.guts = p.maxGuts;
             return p;
         }

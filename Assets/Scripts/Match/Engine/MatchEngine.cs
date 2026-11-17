@@ -20,6 +20,10 @@ namespace SoccerIsland.Match
         public bool underground;
         public int worldMatchId = -1;
         public List<IMatchMission> missions = new List<IMatchMission>();
+        /// <summary>CPUチームの陣形・作戦を性格から自動で決める。</summary>
+        public bool autoSelectCpuTactics = true;
+        /// <summary>「絶対王者」の弱点を見つけたか（見つけていないと勝てない）。</summary>
+        public bool unbeatableBroken;
     }
 
     public class MatchChoice
@@ -121,9 +125,13 @@ namespace SoccerIsland.Match
             _rng = new SeededRandom(setup.seed);
             foreach (var t in new[] { setup.home, setup.away })
             {
+                foreach (var p in t.players) p.RememberNaturalPosition();
+                bool cpu = !setup.protagonistSide.HasValue || setup.protagonistSide.Value != t.side;
+                if (cpu && setup.autoSelectCpuTactics) FormationSystem.AutoSelect(t);
                 t.chemistry = TeamChemistry.Evaluate(t.players);
                 t.mood += t.chemistry.score * 0.5f;
             }
+            ApplyBossTraits();
             Emit(MatchEventType.Info, Side.Home, null, null, $"{setup.title}　{setup.home.name} vs {setup.away.name}　観客{setup.crowd}人");
             foreach (var m in setup.missions) m.OnStart(this);
             Kickoff(Side.Home);
@@ -162,6 +170,20 @@ namespace SoccerIsland.Match
                 {
                     if (CheckClock()) continue;
                     BeginAction();
+                }
+
+                bool reads = _pa.def == null && _pa.defender != null && !IsControllable(_pa.defender) &&
+                             HasTrait(Opponent(Possession), BossTrait.GeniusVision);
+                if (reads)
+                {
+                    // 天才の読み：攻撃側のコマンドを見てから守る
+                    if (_pa.atk == null)
+                    {
+                        if (IsControllable(_pa.attacker)) { Pending = AttackPrompt(); continue; }
+                        AiAttack(_pa);
+                    }
+                    _pa.def = _rng.Chance(0.45f) ? CounterOf(_pa.atk.Value) : AiDefense(_pa.defender);
+                    if (_pa.def == MatchCommand.Block && Zone < 4) _pa.def = MatchCommand.Tackle;
                 }
 
                 if (_pa.def == null)
@@ -623,7 +645,8 @@ namespace SoccerIsland.Match
             var targets = PassTargets(p);
             if (targets.Count == 0) pass = longPass = oneTwo = centering = 0;
 
-            int i = _rng.WeightedIndex(new[] { dribble, pass, longPass, oneTwo, shoot, keep, centering });
+            var tw = FormationSystem.AttackWeights(team.tactic, Lane);
+            int i = _rng.WeightedIndex(new[] { dribble * tw[0], pass * tw[1], longPass * tw[2], oneTwo * tw[3], shoot * tw[4], keep * tw[5], centering * tw[6] });
             switch (i)
             {
                 case 0: pa.atk = HasSpecial(p, SpecialKind.Dribble) && pa.defender != null && _rng.Chance(0.3f) ? MatchCommand.SpecialDribble : MatchCommand.Dribble; break;
@@ -773,7 +796,8 @@ namespace SoccerIsland.Match
             float tension = 0.85f + 0.3f * p.tension / 100f;
             float guts = p.GutsRatio < 0.25f ? 0.75f : 1f;
             float mood = 1f + t.mood / 500f;
-            return tension * guts * mood;
+            float pos = p.OutOfPosition ? 0.92f : 1f;
+            return tension * guts * mood * pos;
         }
 
         Side SideOf(MatchPlayer p) => Home.players.Contains(p) ? Side.Home : Side.Away;
@@ -784,6 +808,7 @@ namespace SoccerIsland.Match
         {
             if (p == null) return;
             int cost = special != null ? special.gutsCost : GutsCost(c);
+            cost = (int)Math.Round(cost * FormationSystem.GutsDrain(TeamOf(SideOf(p))));
             p.guts = Math.Max(0, p.guts - cost);
         }
 
@@ -856,7 +881,8 @@ namespace SoccerIsland.Match
         void ResolveDribble(MatchPlayer a, MatchPlayer d, MatchCommand def, MatchCommand cmd, SpecialMove special, SpecialMove defSpecial)
         {
             bool flair = cmd == MatchCommand.FlairDribble;
-            float att = (a.stats.dribbling * 0.5f + a.stats.technique * 0.25f + a.stats.speed * 0.25f) * Perf(a) - (flair ? 8f : 0f) + (special?.power ?? 0);
+            float att = (a.stats.dribbling * 0.5f + a.stats.technique * 0.25f + a.stats.speed * 0.25f) * Perf(a) - (flair ? 8f : 0f) + (special?.power ?? 0)
+                        + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane);
             if (special != null)
                 Emit(MatchEventType.Dribble, Possession, a, d, $"{a.name}「{special.shout}」　{special.name}！", 0f, true, special.name, special.shout);
 
@@ -866,7 +892,8 @@ namespace SoccerIsland.Match
             else if (tackling)
             {
                 if (CheckFoul(d, a)) return;
-                float tk = (d.stats.defense * 0.55f + d.stats.physical * 0.25f + d.stats.speed * 0.2f) * Perf(d) + (defSpecial?.power ?? 0);
+                float tk = (d.stats.defense * 0.55f + d.stats.physical * 0.25f + d.stats.speed * 0.2f) * Perf(d) + (defSpecial?.power ?? 0)
+                           + FormationSystem.DefenseBonus(Opponent(Possession), def, Zone);
                 won = Roll(att) > Roll(tk);
                 if (!won) d.tacklesWon++;
             }
@@ -913,7 +940,8 @@ namespace SoccerIsland.Match
         void ResolvePass(MatchPlayer a, MatchPlayer target, MatchPlayer d, MatchCommand cmd, MatchCommand def)
         {
             if (target == null) { ResolveKeep(a, d, def); return; }
-            float pass = (a.stats.passing * 0.7f + a.stats.technique * 0.3f) * Perf(a) + TeamOf(Possession).chemistry.Teamwork * 20f;
+            float pass = (a.stats.passing * 0.7f + a.stats.technique * 0.3f) * Perf(a) + TeamOf(Possession).chemistry.Teamwork * 20f
+                         + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane);
             if (cmd == MatchCommand.LongPass) pass -= 8f;
             if (cmd == MatchCommand.OneTwo) { pass += (target.stats.passing - 50) * 0.2f; Spend(target, MatchCommand.OneTwo); }
 
@@ -930,7 +958,8 @@ namespace SoccerIsland.Match
             bool intercepted = false;
             if (d != null && def == MatchCommand.PassCut)
             {
-                float cut = (d.stats.defense * 0.5f + d.stats.speed * 0.3f + d.stats.mental * 0.2f) * Perf(d);
+                float cut = (d.stats.defense * 0.5f + d.stats.speed * 0.3f + d.stats.mental * 0.2f) * Perf(d)
+                            + FormationSystem.DefenseBonus(Opponent(Possession), def, Zone);
                 intercepted = Roll(cut) > Roll(pass + 6f);
             }
             else if (cmd == MatchCommand.LongPass) intercepted = _rng.Chance(0.12f);
@@ -978,7 +1007,8 @@ namespace SoccerIsland.Match
         void ResolveCentering(MatchPlayer a, MatchPlayer target, MatchPlayer d, MatchCommand def)
         {
             if (target == null) { ResolveKeep(a, d, def); return; }
-            float cross = (a.stats.passing * 0.6f + a.stats.technique * 0.4f) * Perf(a);
+            float cross = (a.stats.passing * 0.6f + a.stats.technique * 0.4f) * Perf(a)
+                          + FormationSystem.AttackBonus(TeamOf(Possession), MatchCommand.Centering, Zone, Lane);
             if (d != null && def == MatchCommand.PassCut)
             {
                 float cut = (d.stats.defense * 0.5f + d.stats.speed * 0.3f + d.stats.mental * 0.2f) * Perf(d);
@@ -1020,7 +1050,7 @@ namespace SoccerIsland.Match
                 case MatchCommand.Volley: atk = (r.stats.shooting * 0.5f + r.stats.technique * 0.5f) * Perf(r) - 5f; break;
                 default: atk = (r.stats.technique * 0.6f + r.stats.physical * 0.4f) * Perf(r) + 5f; break;
             }
-            atk += (s.cross - 50f) * 0.2f;
+            atk += (s.cross - 50f) * 0.2f + FormationSystem.AttackBonus(TeamOf(Possession), s.atk.Value, 6, 1);
 
             bool won = true;
             if (d != null)
@@ -1032,6 +1062,7 @@ namespace SoccerIsland.Match
                     case MatchCommand.Compete: dv = (d.stats.physical * 0.7f + d.stats.speed * 0.3f) * Perf(d) + 3f; break;
                     default: dv = (d.stats.defense * 0.4f + d.stats.speed * 0.4f + d.stats.mental * 0.2f) * Perf(d) - 4f; break;
                 }
+                dv += FormationSystem.DefenseBonus(Opponent(Possession), s.def.Value, 6);
                 won = Roll(atk) > Roll(dv);
             }
 
@@ -1139,7 +1170,8 @@ namespace SoccerIsland.Match
             }
 
             float dist = Zone >= 6 ? 1f : Zone == 5 ? 0.9f : Zone == 4 ? 0.75f : Zone == 3 ? 0.55f : 0.35f;
-            float shot = (a.stats.shooting * 0.7f + a.stats.technique * 0.3f) * Perf(a) * dist + (special?.power ?? 0) + bonus;
+            float shot = (a.stats.shooting * 0.7f + a.stats.technique * 0.3f) * Perf(a) * dist + (special?.power ?? 0) + bonus
+                         + FormationSystem.AttackBonus(TeamOf(Possession), cmd, Zone, Lane);
             if (special != null)
             {
                 Emit(MatchEventType.SpecialShot, Possession, a, null, $"{a.name}「{special.shout}」　必殺の{special.name}！", 0f, true, special.name, special.shout);
@@ -1151,7 +1183,8 @@ namespace SoccerIsland.Match
             bool blocking = def == MatchCommand.Block || def == MatchCommand.SpecialBlock;
             if (d != null && blocking && d.position != Position.GK)
             {
-                float blk = (d.stats.defense * 0.6f + d.stats.physical * 0.4f) * Perf(d) + (defSpecial?.power ?? 0);
+                float blk = (d.stats.defense * 0.6f + d.stats.physical * 0.4f) * Perf(d) + (defSpecial?.power ?? 0)
+                            + FormationSystem.DefenseBonus(defTeam, def, Zone);
                 if (Roll(blk) > Roll(shot + 10f))
                 {
                     Emit(MatchEventType.Blocked, defTeam.side, d, a, $"{d.name}が体を張ってブロック！", 0f, true, defSpecial?.name, null);
@@ -1192,6 +1225,7 @@ namespace SoccerIsland.Match
 
             float save = (k.stats.goalkeeping * 0.8f + k.stats.mental * 0.2f) * Perf(k);
             if (cmd == MatchCommand.Punch) save += 7f;
+            if (HasTrait(defTeam, BossTrait.IronWall)) save += 10f;
             if (special != null)
             {
                 save += special.power;
@@ -1277,6 +1311,8 @@ namespace SoccerIsland.Match
             if (d.soccerPersonality == SoccerPersonality.Hysteric) c += 0.08f;
             if (d.tension > 85f) c += 0.05f;
             if (d.role == PlayerRole.Physical || team.instruction == TeamInstruction.PlayPhysical) c += 0.05f;
+            if (HasTrait(team, BossTrait.BribedReferee)) c *= 0.4f;               // 自分たちのファウルは見逃される
+            if (HasTrait(Opponent(team.side), BossTrait.BribedReferee)) c *= 1.6f; // 相手のファウルは厳しく取られる
             if (!_rng.Chance(c)) return false;
 
             Emit(MatchEventType.Foul, team.side, d, victim, $"{d.name}のファウル！");
@@ -1462,6 +1498,58 @@ namespace SoccerIsland.Match
         // ==================================================================
         // 足がつる・イベント用
         // ==================================================================
+
+        public static bool HasTrait(MatchTeam t, BossTrait trait) => t != null && t.traits.Contains(trait);
+
+        void ApplyBossTraits()
+        {
+            foreach (var t in new[] { Home, Away })
+            {
+                var opp = Opponent(t.side);
+                if (HasTrait(t, BossTrait.Intimidation))
+                {
+                    foreach (var p in opp.Active)
+                        p.tension = Math.Max(0f, p.tension + (p.soccerPersonality == SoccerPersonality.Fighter || p.soccerPersonality == SoccerPersonality.Hysteric ? 5f : -15f));
+                    Emit(MatchEventType.Info, t.side, null, null, $"{t.name}の威圧感に、{opp.name}の選手たちが萎縮している……", 0f, true, null, null);
+                }
+                if (HasTrait(t, BossTrait.Unbeatable) && !Setup.unbeatableBroken)
+                {
+                    foreach (var p in t.players)
+                    {
+                        for (int i = 0; i < NPCAbilities.StatCount; i++) p.stats[i] = NPCAbilities.Clamp(p.stats[i] + 15);
+                        p.maxGuts = p.guts = p.maxGuts * 3 / 2;
+                    }
+                    Emit(MatchEventType.Info, t.side, null, null, $"{t.name}……まるで歯が立たない気配がする。何か弱点はないのか？", 0f, true, null, null);
+                }
+            }
+        }
+
+        /// <summary>試合中に作戦を変える（コーチングのクールダウンを使う）。</summary>
+        public List<MeetingReaction> ChangeTactic(TeamTactic tactic)
+        {
+            var team = ProtagonistTeam;
+            if (team == null || !CanCoach) return null;
+            _lastCoachMinute = MinuteInt;
+            var r = FormationSystem.SetTactic(team, tactic);
+            Emit(MatchEventType.CoachingAccepted, team.side, Protagonist, null, $"作戦変更：{FormationSystem.Name(tactic)}");
+            return r;
+        }
+
+        /// <summary>天才の読み：相手のコマンドに対する一番の対抗手段。</summary>
+        static MatchCommand CounterOf(MatchCommand atk)
+        {
+            switch (atk)
+            {
+                case MatchCommand.Pass:
+                case MatchCommand.LongPass:
+                case MatchCommand.OneTwo:
+                case MatchCommand.Centering:
+                case MatchCommand.BackPass: return MatchCommand.PassCut;
+                case MatchCommand.Shoot:
+                case MatchCommand.SpecialShot: return MatchCommand.Block;
+                default: return MatchCommand.Tackle;
+            }
+        }
 
         public void CrampProtagonist()
         {

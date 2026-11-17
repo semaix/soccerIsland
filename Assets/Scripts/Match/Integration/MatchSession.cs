@@ -49,6 +49,19 @@ namespace SoccerIsland.Match
             return MeetingResult;
         }
 
+        /// <summary>フォーメーションを決める（ミーティング中）。</summary>
+        public void SetFormation(Formation f)
+        {
+            if (Current == Phase.Meeting && MyTeam != null) FormationSystem.Apply(MyTeam, f);
+        }
+
+        /// <summary>作戦を決める（ミーティング中）。性格による反応が返る。</summary>
+        public List<MeetingReaction> SetTactic(TeamTactic t)
+        {
+            if (Current != Phase.Meeting || MyTeam == null) return new List<MeetingReaction>();
+            return FormationSystem.SetTactic(MyTeam, t);
+        }
+
         public MatchEngine Kickoff()
         {
             if (Engine != null) return Engine;

@@ -71,6 +71,16 @@ namespace SoccerIsland.Match
         RaiseLine,    // ラインを上げろ（オフサイドトラップを狙う）
     }
 
+    /// <summary>ボスチームの特殊能力。</summary>
+    public enum BossTrait
+    {
+        Intimidation,   // 威圧：キックオフ時に相手のテンションを下げる
+        BribedReferee,  // 審判買収：自分たちのファウルは取られにくく、相手のファウルは取られやすい
+        GeniusVision,   // 天才の読み：相手のコマンドを読んで守る
+        IronWall,       // 鉄壁：キーパーが強い
+        Unbeatable,     // 絶対王者：条件を満たさないと能力が大幅に上がる（どうしても勝てない裏チーム）
+    }
+
     /// <summary>コーチングで与えた個人の役割。</summary>
     public enum PlayerRole
     {
@@ -111,6 +121,17 @@ namespace SoccerIsland.Match
         public string demandLine;
         public int lastTouchMinute;
         public PlayerRole role;
+        /// <summary>本来のポジション（フォーメーションで別の位置に置くと少し力が落ちる）。</summary>
+        public Position naturalPosition;
+        public bool naturalSet;
+        public bool OutOfPosition => naturalSet && naturalPosition != position;
+
+        public void RememberNaturalPosition()
+        {
+            if (naturalSet) return;
+            naturalPosition = position;
+            naturalSet = true;
+        }
         public int lastDemandMinute = -100;
 
         // 試合の記録
@@ -137,6 +158,28 @@ namespace SoccerIsland.Match
         RaiseLine,
     }
 
+    /// <summary>フォーメーション（GKを除く DF-MF-FW）。</summary>
+    public enum Formation
+    {
+        F442,  // 4-4-2 バランス
+        F433,  // 4-3-3 攻撃的
+        F352,  // 3-5-2 中盤重視
+        F541,  // 5-4-1 守備的
+        F343,  // 3-4-3 超攻撃的
+    }
+
+    /// <summary>作戦。</summary>
+    public enum TeamTactic
+    {
+        Balanced,     // バランス
+        Counter,      // カウンター（奪ったら縦に速く）
+        WingAttack,   // サイド攻撃（センタリング多め）
+        CentralBreak, // 中央突破（ドリブル・ワンツー）
+        Possession,   // パスをつなぐ
+        HighPress,    // 前線からプレス（ガッツを消耗）
+        ParkTheBus,   // ゴール前を固める
+    }
+
     public class MatchTeam
     {
         public string name;
@@ -151,6 +194,10 @@ namespace SoccerIsland.Match
         public TeamInstruction instruction;
         public int instructionUntilMinute;
         public bool offsideTrapPlanned;
+        public Formation formation = Formation.F442;
+        public TeamTactic tactic = TeamTactic.Balanced;
+        /// <summary>ボス戦などの特殊能力。</summary>
+        public List<BossTrait> traits = new List<BossTrait>();
         /// <summary>ボールを集める選手（「俺によこせ」に応えたとき）。</summary>
         public MatchPlayer focusPlayer;
         public int focusUntilMinute;
