@@ -196,6 +196,8 @@ namespace SoccerIsland.Match
         public int instructionUntilMinute;
         public bool offsideTrapPlanned;
         public Formation formation = Formation.F442;
+        /// <summary>街の選抜チームならその街（地域対抗のライバル意識に使う）。-1 は街と関係ない。</summary>
+        public int town = -1;
         public TeamTactic tactic = TeamTactic.Balanced;
         /// <summary>ボス戦などの特殊能力。</summary>
         public List<BossTrait> traits = new List<BossTrait>();
@@ -318,6 +320,8 @@ namespace SoccerIsland.Match
         public List<MatchEvent> log = new List<MatchEvent>();
         /// <summary>主人公がこの試合で稼いだ経験値。</summary>
         public int protagonistExp;
+        /// <summary>主人公のゴールパフォーマンスの回数。</summary>
+        public int celebrations;
         /// <summary>結果反映で上がったレベル。</summary>
         public List<int> levelUps = new List<int>();
         /// <summary>レベルアップで覚えた必殺技。</summary>

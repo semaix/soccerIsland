@@ -105,6 +105,11 @@ namespace SoccerIsland.Career
         // ---- 自作 ----
         public SignatureDesign signature = new SignatureDesign();
         public List<GoalPerformanceDesign> goalPerformances = new List<GoalPerformanceDesign>();
+        /// <summary>試合で使うゴールパフォーマンス（goalPerformances の番号。-1 はなし）。</summary>
+        public int selectedPerformance = -1;
+
+        public GoalPerformanceDesign SelectedPerformance =>
+            selectedPerformance >= 0 && selectedPerformance < goalPerformances.Count ? goalPerformances[selectedPerformance] : null;
 
         public const int MaxTransactions = 300;
 

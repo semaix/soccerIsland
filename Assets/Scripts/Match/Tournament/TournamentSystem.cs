@@ -212,6 +212,7 @@ namespace SoccerIsland.Match
                     ids.Add(n.id);
                 }
                 t = MatchFactory.FromLineup(e.name, ids, db, State.underground, rng);
+                t.town = e.town;
                 if (e.isPlayer) MatchFactory.InsertProtagonist(t, _career.Player, 11);
             }
             else if (e.isPlayer) t = PlayerTeam(rng);
@@ -287,6 +288,7 @@ namespace SoccerIsland.Match
                 crowd = State.underground ? 150 : State.kind == TournamentKind.GodCup ? 8000 : 3000,
                 underground = State.underground,
                 unbeatableBroken = BossTeams.KnowsUndergroundKingsWeakness(_career),
+                celebration = _career.Player.SelectedPerformance,
             };
             return setup;
         }

@@ -22,6 +22,8 @@ namespace SoccerIsland.Match
         public List<IMatchMission> missions = new List<IMatchMission>();
         /// <summary>CPUチームの陣形・作戦を性格から自動で決める。</summary>
         public bool autoSelectCpuTactics = true;
+        /// <summary>主人公がゴールを決めたときのパフォーマンス（null ならなし）。</summary>
+        public SoccerIsland.Career.GoalPerformanceDesign celebration;
         /// <summary>「絶対王者」の弱点を見つけたか（見つけていないと勝てない）。</summary>
         public bool unbeatableBroken;
     }
@@ -80,6 +82,8 @@ namespace SoccerIsland.Match
         /// <summary>八百長の疑い（0〜100）。100で発覚。</summary>
         public float Suspicion { get; private set; }
         public int OffsideTrapsSucceeded { get; private set; }
+        /// <summary>主人公がゴールパフォーマンスをした回数。</summary>
+        public int CelebrationsPerformed { get; private set; }
         public IMatchController Controller { get; set; }
 
         public List<MatchEvent> Log { get; } = new List<MatchEvent>();
@@ -132,6 +136,7 @@ namespace SoccerIsland.Match
                 t.mood += t.chemistry.score * 0.5f;
             }
             ApplyBossTraits();
+            ApplyTownRivalry();
             Emit(MatchEventType.Info, Side.Home, null, null, $"{setup.title}　{setup.home.name} vs {setup.away.name}　観客{setup.crowd}人");
             foreach (var m in setup.missions) m.OnStart(this);
             Kickoff(Side.Home);
@@ -1274,6 +1279,8 @@ namespace SoccerIsland.Match
             foreach (var p in team.Active) p.tension = Math.Min(100f, p.tension + 8f);
             foreach (var p in opp.Active) p.tension = Math.Max(0f, p.tension - 6f);
 
+            if (scorer.isProtagonist) Celebrate(scorer, opp);
+
             if (team == ProtagonistTeam)
             {
                 if (scorer.isProtagonist) ChangeTrust(15f, "ゴール");
@@ -1282,6 +1289,54 @@ namespace SoccerIsland.Match
             _chainActions = 0;
             Kickoff(opp.side);
         }
+
+        /// <summary>ゴールパフォーマンス。ユニフォームを脱ぐとイエロー、挑発すると相手が燃える。</summary>
+        void Celebrate(MatchPlayer scorer, MatchTeam opp)
+        {
+            var design = Setup.celebration;
+            if (design == null || !design.IsValid || scorer.sentOff) return;
+            CelebrationsPerformed++;
+            var moves = new List<string>();
+            foreach (var m in design.moves) moves.Add(MoveName(m));
+            Emit(MatchEventType.Info, SideOf(scorer), scorer, null,
+                 $"{scorer.name}のゴールパフォーマンス「{design.name}」！（{string.Join("→", moves)}）", 0f, true, design.name, null);
+            if (Setup.crowd >= 100) scorer.beautifulSkills++;
+            if (design.IsProvocative)
+            {
+                foreach (var p in opp.Active) p.tension = Math.Min(100f, p.tension + 8f);
+                Emit(MatchEventType.Info, opp.side, null, null, $"{opp.name}の選手たちが激怒している！");
+            }
+            if (design.RisksYellowCard)
+            {
+                scorer.yellowCards++;
+                Emit(MatchEventType.YellowCard, SideOf(scorer), scorer, null, $"{scorer.name}、ユニフォームを脱いでイエローカード！");
+                if (scorer.yellowCards >= 2) SendOff(scorer, "パフォーマンスで2枚目のイエロー、退場……！");
+            }
+        }
+
+        static string MoveName(SoccerIsland.Career.PerformanceMove m)
+        {
+            switch (m)
+            {
+                case SoccerIsland.Career.PerformanceMove.Run: return "走り回る";
+                case SoccerIsland.Career.PerformanceMove.KneeSlide: return "ひざスライディング";
+                case SoccerIsland.Career.PerformanceMove.Backflip: return "バク宙";
+                case SoccerIsland.Career.PerformanceMove.Cartwheel: return "側転";
+                case SoccerIsland.Career.PerformanceMove.Dance: return "ダンス";
+                case SoccerIsland.Career.PerformanceMove.PointToSky: return "天を指さす";
+                case SoccerIsland.Career.PerformanceMove.HeartHands: return "ハート";
+                case SoccerIsland.Career.PerformanceMove.ShushCrowd: return "観客を黙らせる";
+                case SoccerIsland.Career.PerformanceMove.CornerFlagKick: return "コーナーフラッグを蹴る";
+                case SoccerIsland.Career.PerformanceMove.Salute: return "敬礼";
+                case SoccerIsland.Career.PerformanceMove.Robot: return "ロボットダンス";
+                case SoccerIsland.Career.PerformanceMove.Bow: return "お辞儀";
+                case SoccerIsland.Career.PerformanceMove.TeammateHug: return "仲間と抱き合う";
+                case SoccerIsland.Career.PerformanceMove.ShirtOverHead: return "ユニフォームを脱ぐ";
+                default: return "ファンに手を振る";
+            }
+        }
+
+        public static string PerformanceMoveName(SoccerIsland.Career.PerformanceMove m) => MoveName(m);
 
         void LoseBall(MatchPlayer a, MatchPlayer stealer)
         {
@@ -1527,6 +1582,19 @@ namespace SoccerIsland.Match
             }
         }
 
+        /// <summary>地域対抗：ライバルの街との試合は燃える。</summary>
+        void ApplyTownRivalry()
+        {
+            if (Home.town < 0 || Away.town < 0) return;
+            var th = (Town)Home.town;
+            var ta = (Town)Away.town;
+            foreach (var p in Home.players) p.tension = Math.Min(100f, p.tension + TownRivalry.DerbyTension(th, ta));
+            foreach (var p in Away.players) p.tension = Math.Min(100f, p.tension + TownRivalry.DerbyTension(ta, th));
+            string flavor = TownRivalry.Flavor(th, ta);
+            if (flavor.Length > 0)
+                Emit(MatchEventType.Info, Side.Home, null, null, $"{flavor}！ {NPCLabels.Of(th)}と{NPCLabels.Of(ta)}、スタンドは一触即発の雰囲気だ！", 0f, true, null, null);
+        }
+
         /// <summary>試合中に作戦を変える（コーチングのクールダウンを使う）。</summary>
         public List<MeetingReaction> ChangeTactic(TeamTactic tactic)
         {
@@ -1574,6 +1642,7 @@ namespace SoccerIsland.Match
                 homeScore = Home.score, awayScore = Away.score,
                 protagonistSide = Setup.protagonistSide, protagonist = Protagonist,
                 trust = Trust, suspicion = Suspicion, fixingExposed = Suspicion >= 100f,
+                celebrations = CelebrationsPerformed,
                 log = Log,
             };
             foreach (var t in new[] { Home, Away })

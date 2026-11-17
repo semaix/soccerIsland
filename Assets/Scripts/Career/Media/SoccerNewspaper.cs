@@ -74,14 +74,30 @@ namespace SoccerIsland.Career
                     default: priority = 15 + Math.Min(20, (m.homeScore + m.awayScore) * 3); break;
                 }
                 string result = m.homeScore > m.awayScore ? $"{m.homeName}が勝利" : m.homeScore < m.awayScore ? $"{m.awayName}が勝利" : "引き分け";
+                string flavor = "";
+                if (m.category == MatchCategory.RegionalDerby)
+                {
+                    int ht = MajorityTown(m.homeLineup), at = MajorityTown(m.awayLineup);
+                    if (ht >= 0 && at >= 0) flavor = TownRivalry.Flavor((Town)ht, (Town)at);
+                    if (flavor.Length > 0) priority += 10;
+                }
                 a.Add(new Article
                 {
                     category = ArticleCategory.Match, priority = priority,
-                    title = $"【{MatchLabels.Of(m.category)}】{m.homeName} {m.homeScore}-{m.awayScore} {m.awayName}",
+                    title = $"【{(flavor.Length > 0 ? flavor : MatchLabels.Of(m.category))}】{m.homeName} {m.homeScore}-{m.awayScore} {m.awayName}",
                     body = $"{m.venue}で行われた一戦は{result}。",
                     npcIds = new List<int>(m.homeLineup),
                 });
             }
+        }
+
+        int MajorityTown(List<int> lineup)
+        {
+            var count = new int[Enum.GetValues(typeof(Town)).Length];
+            foreach (var id in lineup) { var n = _db.Get(id); if (n != null) count[(int)n.hometown]++; }
+            int best = -1;
+            for (int i = 0; i < count.Length; i++) if (count[i] > 0 && (best < 0 || count[i] > count[best])) best = i;
+            return best;
         }
 
         // ---------------- 市場価値・島のニュース ----------------

@@ -1,4 +1,5 @@
 using SoccerIsland.Career;
+using SoccerIsland.NPC;
 using SoccerIsland.World;
 
 namespace SoccerIsland.Match
@@ -29,12 +30,23 @@ namespace SoccerIsland.Match
             {
                 career.Player.matchBuffs.Clear();
                 career.Fame.RecordMatch(setup.category, pro.rating, pro.goals, pro.assists, setup.underground ? 0 : pro.beautifulSkills);
+                // ゴールパフォーマンスの評判（裏の試合は誰も見ていない）
+                if (setup.celebration != null && !setup.underground)
+                    for (int i = 0; i < result.celebrations; i++) career.Fame.RecordGoalCelebration(setup.celebration);
                 result.levelUps = PlayerGrowth.AddExperience(career.Player, result.protagonistExp);
                 foreach (var lv in result.levelUps)
                 {
                     var m = SpecialMoveLibrary.ForProtagonistLevel(lv);
                     if (m != null) result.learnedSpecials.Add(m);
                 }
+            }
+
+            // 地域対抗：街の評判
+            if (result.protagonistSide.HasValue && setup.home.town >= 0 && setup.away.town >= 0)
+            {
+                var mine = result.protagonistSide == Side.Home ? setup.home : setup.away;
+                var theirs = result.protagonistSide == Side.Home ? setup.away : setup.home;
+                career.Towns.RecordDerby((Town)mine.town, (Town)theirs.town, result.ProtagonistWon, result.ProtagonistLost);
             }
 
             // 島民：いい試合をすれば話題に、ひどければ評価が下がる

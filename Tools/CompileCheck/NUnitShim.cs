@@ -9,6 +9,8 @@ namespace NUnit.Framework {
     public static void AreNotEqual(object e, object a, string m=null){ if(Equals(e,a)) F($"not expected {e} {m}"); }
     public static void AreEqual(double e, double a, double delta, string m=null){ if(Math.Abs(e-a)>delta) F($"expected {e} got {a} {m}"); }
     public static T Throws<T>(Action act) where T: Exception { try { act(); } catch (T ex) { return ex; } F("expected exception " + typeof(T).Name); return null; }
+    public static void AreSame(object e, object a, string m=null){ if(!ReferenceEquals(e,a)) F("not same "+m); }
+    public static void Fail(string m){ F(m); }
     public static void IsTrue(bool c, string m=null){ if(!c) F("IsTrue "+m); }
     public static void Greater(IComparable a, IComparable b, string m=null){ if(a.CompareTo(Convert.ChangeType(b,a.GetType()))<=0) F($"{a}>{b} {m}"); }
     public static void GreaterOrEqual(IComparable a, IComparable b, string m=null){ if(a.CompareTo(Convert.ChangeType(b,a.GetType()))<0) F($"{a}>={b} {m}"); }

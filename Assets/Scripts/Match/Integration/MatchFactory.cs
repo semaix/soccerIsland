@@ -161,6 +161,12 @@ namespace SoccerIsland.Match
             var home = FromLineup(m.homeName, m.homeLineup, db, underground, rng);
             var away = m.awayLineup.Count > 0 ? FromLineup(m.awayName, m.awayLineup, db, underground, rng) : Generic(m.awayName, 66, size, rng);
 
+            if (m.category == MatchCategory.RegionalDerby)
+            {
+                home.town = MajorityTown(m.homeLineup, db);
+                away.town = MajorityTown(m.awayLineup, db);
+            }
+
             if (!protagonistSide.HasValue && career.Player.teamClubId >= 0)
             {
                 if (m.homeClubId == career.Player.teamClubId) protagonistSide = Side.Home;
@@ -175,7 +181,18 @@ namespace SoccerIsland.Match
                 title = MatchLabels.Of(m.category), category = m.category, home = home, away = away,
                 protagonistSide = protagonistSide, seed = rng.Range(1, int.MaxValue), underground = underground,
                 crowd = Crowd(m.category, career.Player.fame), worldMatchId = m.id,
+                celebration = protagonistSide.HasValue ? career.Player.SelectedPerformance : null,
             };
+        }
+
+        /// <summary>出場メンバーで一番多い出身の街。</summary>
+        public static int MajorityTown(List<int> lineup, NPCDatabase db)
+        {
+            var count = new int[Enum.GetValues(typeof(Town)).Length];
+            foreach (var id in lineup) { var n = db.Get(id); if (n != null) count[(int)n.hometown]++; }
+            int best = -1;
+            for (int i = 0; i < count.Length; i++) if (count[i] > 0 && (best < 0 || count[i] > count[best])) best = i;
+            return best;
         }
 
         /// <summary>恋人と同じチームだと、主人公も恋人も燃える。</summary>

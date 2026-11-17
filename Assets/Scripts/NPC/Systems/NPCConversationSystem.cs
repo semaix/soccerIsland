@@ -39,6 +39,8 @@ namespace SoccerIsland.NPC
 
         public float gossipChance = 0.6f;
         public float topicChance = 0.5f;
+        /// <summary>好感度の上がり方の補正（街のライバル意識・評判など）。Career 側が差し込む。</summary>
+        public Func<NPCData, int, int> affinityModifier;
 
         readonly List<IConversationTopicProvider> _topicProviders = new List<IConversationTopicProvider>();
 
@@ -115,7 +117,9 @@ namespace SoccerIsland.NPC
             }
 
             // ---- 好感度 ----
-            entry.affinity = Math.Min(100, entry.affinity + AffinityGain(npc, entry.talksToday));
+            int gain = AffinityGain(npc, entry.talksToday);
+            if (affinityModifier != null) gain = affinityModifier(npc, gain);
+            entry.affinity = Math.Max(0, Math.Min(100, entry.affinity + gain));
 
             // ---- 本人の情報 ----
             int count = RevealCount(npc);

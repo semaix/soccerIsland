@@ -34,6 +34,8 @@ namespace SoccerIsland.Career
         public float minimumFame = 15f;
         public float maxRequestChance = 0.6f;
         public float badRumorChance = 0.3f;
+        /// <summary>街ごとの評判による倍率（IslandCareer が差し込む）。</summary>
+        public Func<Town, float> townMultiplier;
 
         readonly PlayerState _player;
         readonly NPCKnowledgeBook _book;
@@ -68,6 +70,7 @@ namespace SoccerIsland.Career
             if (npc.fame > _player.fame) c *= 0.3f; // 自分より有名な人はねだらない
             if (npc.age < 18) c *= 1.5f;             // 子供はファンになりやすい
             c *= 1f + InventorySystem.FanBonus(_player); // おしゃれだと声をかけられやすい
+            if (townMultiplier != null) c *= townMultiplier(npc.hometown);
             return Math.Min(0.9f, c);
         }
 

@@ -68,6 +68,7 @@ namespace SoccerIsland.Career
         public BlackMarket BlackMarket { get; }
         public MysteryPlayerQuest Mystery { get; }
         public CastawayQuest Castaways { get; }
+        public TownReputation Towns { get; }
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -105,6 +106,9 @@ namespace SoccerIsland.Career
             world.Population.Conversation.AddTopicProvider(Mystery);
             world.Population.Conversation.AddTopicProvider(Castaways);
             Scouting.IsGrateful = Castaways.IsGrateful;
+            Towns = new TownReputation(Player, Events);
+            world.Population.Conversation.affinityModifier = Towns.ModifyAffinityGain;
+            Fans.townMultiplier = Towns.FanMultiplier;
             Inventory = new InventorySystem(Player, world.State, Fame, today);
             BlackMarket.inventory = Inventory;
             Romance = new RomanceSystem(Player, world.Population, world.State, save?.romance ?? new RomanceState(), _fameEvents, rng);

@@ -12,7 +12,15 @@ namespace UnityEngine
     public static class Application { public static string persistentDataPath = ""; public static bool isPlaying; }
     public static class JsonUtility { public static string ToJson(object o) => ""; public static T FromJson<T>(string s) => default(T); }
     public static class Screen { public static int width, height; }
-    public struct Rect { public float width, height; public Rect(float x, float y, float w, float h) { width = w; height = h; } }
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+        public bool Contains(Vector2 p) => p.x >= x && p.y >= y && p.x <= x + width && p.y <= y + height;
+    }
+    public enum EventType { MouseDown, MouseUp, MouseDrag, Repaint, Layout }
+    public class Event { public static Event current = new Event(); public EventType type; public Vector2 mousePosition; public void Use() { } }
+    public static class GUILayoutUtility { public static Rect GetRect(float w, float h, params GUILayoutOption[] o) => new Rect(0, 0, w, h); }
     public struct Vector2 { public float x, y; public Vector2(float x, float y) { this.x = x; this.y = y; } }
     public struct Color { public float r, g, b, a; public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; } public static implicit operator Color32(Color c) => new Color32(); }
     public struct Color32 { public Color32(byte r, byte g, byte b, byte a) { } }
@@ -28,7 +36,12 @@ namespace UnityEngine
     public class GUIStyle { public GUIStyle() { } public GUIStyle(GUIStyle o) { } public int fontSize; public FontStyle fontStyle; }
     public class GUISkin { public GUIStyle label = new GUIStyle(); }
     public class GUILayoutOption { }
-    public static class GUI { public static GUISkin skin = new GUISkin(); }
+    public static class GUI
+    {
+        public static GUISkin skin = new GUISkin();
+        public static void Box(Rect r, string s) { }
+        public static void DrawTexture(Rect r, Texture2D t) { }
+    }
     public static class GUILayout
     {
         public static void BeginArea(Rect r) { } public static void EndArea() { }

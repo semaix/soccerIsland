@@ -16,6 +16,9 @@ namespace SoccerIsland.Career
         public List<int> clueSources = new List<int>();
         public bool phantomFound;
 
+        // 街ごとの主人公の評判（Town の順）
+        public List<int> townReputation = new List<int>();
+
         // 漂流者
         public List<int> registeredCastaways = new List<int>();
     }
