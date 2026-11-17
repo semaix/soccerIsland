@@ -3,6 +3,7 @@
     "rootNamespace": "SoccerIsland.NPC.Tests",
     "references": [
         "SoccerIsland.NPC",
+        "SoccerIsland.World",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

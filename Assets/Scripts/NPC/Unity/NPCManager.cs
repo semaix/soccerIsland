@@ -24,14 +24,22 @@ namespace SoccerIsland.NPC.UnityIntegration
         public string saveFileName = "island_npcs.json";
 
         public IslandPopulation Population { get; private set; }
+        /// <summary>今回の起動でセーブデータから復元したか。</summary>
+        public bool LoadedFromSave { get; private set; }
         public NPCDatabase Database => Population?.Database;
 
         /// <summary>会話が終わったとき（UI・相関図・新聞の更新用）。</summary>
         public event Action<ConversationResult> OnConversation;
         /// <summary>市場価値が変わったとき。</summary>
         public event Action<MarketValueChange> OnMarketValueChanged;
+        /// <summary>日付が進む直前（その日の試合・買い物の処理用）。</summary>
+        public event Action OnBeforeDayAdvance;
         /// <summary>1日が終わったとき。</summary>
         public event Action<DayReport> OnDayAdvanced;
+        /// <summary>セーブするとき（ワールド側も一緒にセーブする用）。</summary>
+        public event Action OnSave;
+        /// <summary>島民データが作り直された／ロードされたとき。</summary>
+        public event Action<IslandPopulation> OnPopulationReplaced;
 
         string SavePath => Path.Combine(Application.persistentDataPath, saveFileName);
 
@@ -45,7 +53,8 @@ namespace SoccerIsland.NPC.UnityIntegration
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            if (!(loadSaveOnStart && TryLoad())) GenerateNew();
+            LoadedFromSave = loadSaveOnStart && TryLoad();
+            if (!LoadedFromSave) GenerateNew();
         }
 
         void OnDestroy()
@@ -67,6 +76,7 @@ namespace SoccerIsland.NPC.UnityIntegration
             if (Population != null) Population.Market.OnChanged -= RaiseMarketChanged;
             Population = population;
             Population.Market.OnChanged += RaiseMarketChanged;
+            OnPopulationReplaced?.Invoke(population);
         }
 
         void RaiseMarketChanged(MarketValueChange c) => OnMarketValueChanged?.Invoke(c);
@@ -86,6 +96,7 @@ namespace SoccerIsland.NPC.UnityIntegration
 
         public DayReport AdvanceDay()
         {
+            OnBeforeDayAdvance?.Invoke();
             var report = Population.AdvanceDay();
             OnDayAdvanced?.Invoke(report);
             return report;
@@ -105,6 +116,7 @@ namespace SoccerIsland.NPC.UnityIntegration
 #endif
             // パスには端末のユーザー名などが含まれ得るのでログに出さない
             Debug.Log($"[NPCManager] セーブしました ({json.Length / 1024}KB)");
+            OnSave?.Invoke();
         }
 
         public bool TryLoad()

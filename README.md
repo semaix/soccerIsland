@@ -27,6 +27,7 @@ Assets/Scripts/NPC/
 │   ├─ NPCKnowledgeBook.cs       プレイヤーの手帳（判明情報・好感度・相関図・電話帳）
 │   ├─ NPCProfileView.cs         UI用プロフィール（未判明は「？？？」、能力値は出さない）
 │   ├─ NPCLifecycleSystem.cs     年越し：加齢・覚醒・出所・卒業・引退
+│   ├─ ConversationTopics.cs     会話の話題をワールド側から差し込むインターフェース
 │   └─ IslandPopulation.cs       上記をまとめた窓口＋セーブデータ
 ├─ Unity/
 │   ├─ NPCManager.cs             シーン常駐コンポーネント（生成/ロード/セーブ/イベント）
@@ -69,13 +70,40 @@ mgr.Save();
 | 裏 | マフィア等は裏の人間。協会未登録だと公式ランキングに載らず、裏ランキングにだけ出る |
 | 隠し設定 | `lifeCycle`（人生何周目か）、`publicPerformanceRate`（表では手を抜く）、刑務所の天才と出所年 |
 
+## 実装済み：会話とワールドの連動（`Assets/Scripts/World`）
+
+NPCの話題は必ずワールドの実データから作るので、**話したことは実際に起きている**。
+
+- **試合の話をしたNPCは、その試合に必ず出場する**（出場メンバーは予定作成時に確定）
+- **買ったと言った商品は、必ず完売か商談中**（再入荷で状態が変わった話はしない）
+- 裏フットサル・裏市場の話は好感度60以上でないとしない
+
+| 曜日 | 試合 |
+|---|---|
+| 水 | 刑務所リーグ（A棟 vs B棟） |
+| 金・深夜 | 裏フットサル（会場は廃墟・倉庫などで毎回変わる） |
+| 土 | 職場対抗戦、ビーチサッカー |
+| 日 | 草サッカー（4週に1回は地域対抗試合） |
+| 60日ごと | 島代表戦 |
+
+お店：サッカーハイボール、魔除けタバコ、ノイローゼ注射、若返りフレーク、使用済みポテチ、脅迫タピオカ（表では常に完売・裏市場にだけ在庫）、限定スパイク（商談制）など。高額品は商談中→成立/破談。
+
+使い方：`NPCManager` と同じシーンに `WorldManager` を置く。日付は `NPCManager.AdvanceDay()` で進める（その日の試合・買い物は WorldManager が処理）。
+
+```csharp
+var world = WorldManager.Instance.World;
+var today = world.TodaysMatches();                 // 今日の試合（観戦・参加用）
+var item  = world.State.GetItem(id).SurfaceStatus; // 表のお店で見た状態
+```
+
 ### 個人情報の方針
 
 - 端末（スマホ）内の個人情報は使わない：連絡先・電話番号・位置情報・カメラ・マイク・端末ID・端末名・広告ID・クリップボードを読まない。
 - 外部に出さない：通信・アナリティクス・外部URLを開く処理を持たない。セーブは端末内のみで、iOSではiCloudバックアップ対象外にする。
 - NPCの名前・電話番号はすべて架空。電話番号は実在番号と一致しない `島-XXXX-XXXX` 形式。
 - `PrivacyComplianceTests` が、`Assets/Scripts` に上記に反するAPIが入ると失敗する。
-- Unityプロジェクト作成時の設定：Services の Analytics / Cloud Diagnostics をオフ、Android は `allowBackup=false` にする。
+- エディタ起動時に Analytics / Performance Reporting / Crash Reporting を自動でオフにする（`Assets/Scripts/Privacy/Editor`）。
+- Android ビルド時に `allowBackup=false` を自動で書き込み、Google のクラウドバックアップに含めない。
 
 ### テスト
 

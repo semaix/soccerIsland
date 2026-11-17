@@ -16,6 +16,8 @@ namespace SoccerIsland.NPC
         public List<KnownRelation> newRelations = new List<KnownRelation>();
         /// <summary>この会話によって起きた市場価値の変動。</summary>
         public List<MarketValueChange> marketChanges = new List<MarketValueChange>();
+        /// <summary>この会話で出た話題（試合・買い物など）。</summary>
+        public List<TopicMention> topics = new List<TopicMention>();
         public int affinityBefore;
         public int affinityAfter;
     }
@@ -36,6 +38,17 @@ namespace SoccerIsland.NPC
         readonly SeededRandom _rng;
 
         public float gossipChance = 0.6f;
+        public float topicChance = 0.5f;
+
+        readonly List<IConversationTopicProvider> _topicProviders = new List<IConversationTopicProvider>();
+
+        /// <summary>ワールド側（試合・お店など）が話題を提供するために登録する。</summary>
+        public void AddTopicProvider(IConversationTopicProvider provider)
+        {
+            if (provider != null && !_topicProviders.Contains(provider)) _topicProviders.Add(provider);
+        }
+
+        public void RemoveTopicProvider(IConversationTopicProvider provider) => _topicProviders.Remove(provider);
 
         public NPCConversationSystem(NPCDatabase db, NPCKnowledgeBook book, MarketValueSystem market, SeededRandom rng)
         {
@@ -119,6 +132,10 @@ namespace SoccerIsland.NPC
                 count--;
             }
 
+            // ---- 近況（試合・買い物など、実際に起きていること） ----
+            if (_topicProviders.Count > 0 && _rng.Chance(topicChance))
+                TellTopic(npc, entry, result, day);
+
             // ---- 噂話 ----
             if (npc.relations.Count > 0 && _rng.Chance(GossipChance(npc)))
                 Gossip(npc, result, day);
@@ -130,6 +147,20 @@ namespace SoccerIsland.NPC
 
             result.affinityAfter = entry.affinity;
             return result;
+        }
+
+        void TellTopic(NPCData npc, NPCKnowledgeEntry entry, ConversationResult result, int day)
+        {
+            var ctx = new TopicContext { db = _db, day = day, affinity = entry.affinity, rng = _rng };
+            int start = _rng.Range(0, _topicProviders.Count);
+            for (int i = 0; i < _topicProviders.Count; i++)
+            {
+                var provider = _topicProviders[(start + i) % _topicProviders.Count];
+                if (!provider.TryGetTopic(npc, ctx, out var mention)) continue;
+                result.topics.Add(mention);
+                if (!string.IsNullOrEmpty(mention.line)) result.lines.Add(mention.line);
+                return;
+            }
         }
 
         int AffinityGain(NPCData npc, int talksToday)
