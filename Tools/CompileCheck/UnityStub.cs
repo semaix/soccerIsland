@@ -9,17 +9,18 @@ namespace UnityEngine
     public class MonoBehaviour : Behaviour { }
     public class GameObject : Object
     {
+        public string tag;
         public Transform transform = new Transform();
         public GameObject() { } public GameObject(string name) { this.name = name; }
         public T AddComponent<T>() where T : Component, new() => new T();
         public T GetComponent<T>() => default(T);
     }
-    public class Renderer : Component { public int sortingOrder; public Color color; }
+    public class Renderer : Component { public int sortingOrder; public Color color; public bool enabled; }
     public class SpriteRenderer : Renderer { public Sprite sprite; public bool flipX; }
     public class Sprite : Object { public static Sprite Create(Texture2D t, Rect r, Vector2 pivot, float ppu) => new Sprite(); }
     public static class Resources { public static T Load<T>(string path) where T : Object => null; }
     public static class Time { public static float deltaTime; }
-    public enum KeyCode { None, Z, X, Space, Return, Escape, UpArrow, DownArrow, LeftArrow, RightArrow, W, A, S, D, M }
+    public enum KeyCode { None, Z, X, C, Space, Return, Escape, UpArrow, DownArrow, LeftArrow, RightArrow, W, A, S, D, M }
     public static class Input { public static bool GetKey(KeyCode k) => false; public static bool GetKeyDown(KeyCode k) => false; }
     public class Camera : Behaviour { public static Camera main; public bool orthographic; public float orthographicSize; public Color backgroundColor; public float aspect; }
     public enum FilterMode { Point, Bilinear, Trilinear }
@@ -30,6 +31,7 @@ namespace UnityEngine
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
         public float sqrMagnitude => x * x + y * y + z * z;
         public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
+        public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
         public static Vector3 MoveTowards(Vector3 a, Vector3 b, float d) => b;
     }
     public class ScriptableObject : Object { }
@@ -65,7 +67,7 @@ namespace UnityEngine
         public static float Clamp(float v, float a, float b) => Math.Max(a, Math.Min(b, v)); public static float Round(float f) => (float)Math.Round(f);
     }
     public class GUIStyleState { public Color textColor; }
-    public class GUIStyle { public GUIStyle() { } public GUIStyle(GUIStyle o) { } public int fontSize; public FontStyle fontStyle; public bool wordWrap; public GUIStyleState normal = new GUIStyleState(); }
+    public class GUIStyle { public static GUIStyle none = new GUIStyle(); public GUIStyle() { } public GUIStyle(GUIStyle o) { } public int fontSize; public FontStyle fontStyle; public bool wordWrap; public GUIStyleState normal = new GUIStyleState(); }
     public class GUISkin { public GUIStyle label = new GUIStyle(); }
     public class GUILayoutOption { }
     public static class GUI
@@ -73,6 +75,7 @@ namespace UnityEngine
         public static GUISkin skin = new GUISkin();
         public static void Box(Rect r, string s) { }
         public static void Label(Rect r, string s, GUIStyle st) { }
+        public static bool Button(Rect r, string s, GUIStyle st) => false;
         public static Color color;
         public static void DrawTexture(Rect r, Texture2D t) { }
     }

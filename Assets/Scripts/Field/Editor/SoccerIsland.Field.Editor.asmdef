@@ -1,7 +1,7 @@
 {
     "name": "SoccerIsland.Field.Editor",
     "rootNamespace": "SoccerIsland.Field.EditorTools",
-    "references": [],
+    "references": ["SoccerIsland.NPC", "SoccerIsland.World", "SoccerIsland.Career", "SoccerIsland.Match", "SoccerIsland.Field"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -1,7 +1,7 @@
 {
     "name": "SoccerIsland.Field",
     "rootNamespace": "SoccerIsland.Field",
-    "references": ["SoccerIsland.NPC", "SoccerIsland.World", "SoccerIsland.Career"],
+    "references": ["SoccerIsland.NPC", "SoccerIsland.World", "SoccerIsland.Career", "SoccerIsland.Match"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

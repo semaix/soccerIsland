@@ -30,7 +30,10 @@ namespace SoccerIsland.Match.UnityIntegration
             var c = Career;
             if (c == null) return;
             GUILayout.BeginArea(new Rect(10, 10, Math.Min(Screen.width - 20, 720), Screen.height - 20));
+            GUILayout.BeginHorizontal();
             _mode = (Mode)GUILayout.Toolbar((int)_mode, new[] { "サインを作る", "ゴールパフォーマンスを作る" });
+            if (GUILayout.Button("閉じる", GUILayout.Width(80))) enabled = false;
+            GUILayout.EndHorizontal();
             if (_mode == Mode.Signature) DrawSignature(c); else DrawPerformance(c);
             GUILayout.Label(_message);
             GUILayout.EndArea();

@@ -131,6 +131,15 @@ namespace SoccerIsland.Field
             return m;
         }
 
+        /// <summary>試合画面用のコート（攻撃方向に7ゾーン×3列が見渡せる大きさ）。</summary>
+        public static TownMap PitchMap()
+        {
+            var m = new TownMap(Town.Furugane, 25, 13);
+            for (int y = 0; y < m.height; y++) for (int x = 0; x < m.width; x++) m.SetGround(x, y, FieldTile.DarkGrass);
+            BuildPitch(m, new TileRect(1, 1, 23, 11));
+            return m;
+        }
+
         static void AddZone(TownMap m, IslandPlace place, string label, TileRect r, int ex, int ey)
         {
             m.zones.Add(new MapZone { place = place, label = label, rect = r, entryX = ex, entryY = ey });
@@ -204,7 +213,7 @@ namespace SoccerIsland.Field
                 if (x != r.CenterX && x != r.CenterX - 1) m.SetDeco(x, r.y + r.h, FieldTile.Fence);
                 m.SetDeco(x, r.y - 1, FieldTile.Fence);
             }
-            for (int y = r.y + r.h + 1; y < RoadY; y++) m.SetGround(r.CenterX, y, FieldTile.Path);
+            for (int y = r.y + r.h + 1; y < RoadY && y < m.height; y++) m.SetGround(r.CenterX, y, FieldTile.Path);
         }
 
         static void BuildPrison(TownMap m, TileRect r)

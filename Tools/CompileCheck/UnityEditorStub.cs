@@ -33,6 +33,22 @@ namespace UnityEditor
     [AttributeUsage(AttributeTargets.All)] public class MenuItemAttribute : Attribute { public MenuItemAttribute(string s) { } }
     [AttributeUsage(AttributeTargets.All)] public class InitializeOnLoadAttribute : Attribute { }
 }
+namespace UnityEditor.SceneManagement
+{
+    public enum NewSceneSetup { EmptyScene, DefaultGameObjects }
+    public enum NewSceneMode { Single, Additive }
+    public struct Scene { }
+    public static class EditorSceneManager
+    {
+        public static Scene NewScene(NewSceneSetup s, NewSceneMode m) => new Scene();
+        public static bool SaveScene(Scene s, string path) => true;
+    }
+}
+namespace UnityEditor
+{
+    public class EditorBuildSettingsScene { public string path; public bool enabled; public EditorBuildSettingsScene(string p, bool e) { path = p; enabled = e; } }
+    public static class EditorBuildSettings { public static EditorBuildSettingsScene[] scenes = new EditorBuildSettingsScene[0]; }
+}
 namespace UnityEditor.Analytics
 {
     public static class AnalyticsSettings { public static bool enabled; }
