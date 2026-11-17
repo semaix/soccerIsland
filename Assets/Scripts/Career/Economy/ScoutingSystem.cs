@@ -25,6 +25,8 @@ namespace SoccerIsland.Career
     {
         public int minimumAge = 15;
         public int maxRosterSize = 25;
+        /// <summary>恩を感じている人（登録してあげた漂流者など）は半額で来てくれる。</summary>
+        public Func<int, bool> IsGrateful;
 
         readonly NPCDatabase _db;
         readonly NPCKnowledgeBook _book;
@@ -52,6 +54,7 @@ namespace SoccerIsland.Career
                 case SoccerPersonality.God: p *= 1.5; break;
             }
             if (!npc.registeredWithAssociation) p *= 1.5;         // 裏ルートの手数料
+            if (IsGrateful != null && IsGrateful(npc.id)) p *= 0.5;
             return MarketValueCalculator.RoundValue(p);
         }
 

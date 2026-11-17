@@ -15,6 +15,7 @@ namespace SoccerIsland.Career
         /// <summary>前世の記録（古い順）。</summary>
         public List<LegacyRecord> legacies = new List<LegacyRecord>();
         public RomanceState romance;
+        public IslandEventsState events;
     }
 
     public class CareerDayReport
@@ -62,6 +63,10 @@ namespace SoccerIsland.Career
         public AbilityExam Exam { get; }
         public PhoneSystem Phone { get; }
         public RomanceSystem Romance { get; }
+        public IslandEventsState Events { get; }
+        public BlackMarket BlackMarket { get; }
+        public MysteryPlayerQuest Mystery { get; }
+        public CastawayQuest Castaways { get; }
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -91,6 +96,14 @@ namespace SoccerIsland.Career
             Training = new TrainingSystem(Player, db, world.Population.Knowledge, rng);
             Exam = new AbilityExam(Player, db, Fame, rng);
             Phone = new PhoneSystem(Player, world.Population, world.State, Economy, save?.phone ?? new PhoneState(), rng);
+            Events = save?.events ?? new IslandEventsState();
+            BlackMarket = new BlackMarket(Player, world.Population, world.State, Events);
+            Mystery = new MysteryPlayerQuest(world.Population, Events);
+            Castaways = new CastawayQuest(Player, world.Population, Events);
+            world.Population.Conversation.AddTopicProvider(new BlackMarketHintProvider(BlackMarket));
+            world.Population.Conversation.AddTopicProvider(Mystery);
+            world.Population.Conversation.AddTopicProvider(Castaways);
+            Scouting.IsGrateful = Castaways.IsGrateful;
             Romance = new RomanceSystem(Player, world.Population, world.State, save?.romance ?? new RomanceState(), _fameEvents, rng);
 
             if (isNew)
@@ -167,6 +180,6 @@ namespace SoccerIsland.Career
             return AfterDayAdvance(p);
         }
 
-        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media, phone = Phone.State, legacies = PastLives, romance = Romance.State };
+        public CareerSaveData CreateSave() => new CareerSaveData { player = Player, economy = Economy, media = Media, phone = Phone.State, legacies = PastLives, romance = Romance.State, events = Events };
     }
 }
