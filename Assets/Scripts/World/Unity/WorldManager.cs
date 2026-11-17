@@ -76,6 +76,17 @@ namespace SoccerIsland.World.UnityIntegration
 
         void HandlePopulationReplaced(IslandPopulation population) => Build(population, null);
 
+        /// <summary>外で作ったワールドに差し替える（転生で次の人生を始めるとき）。</summary>
+        public void Adopt(IslandWorld world)
+        {
+            if (World != null)
+            {
+                World.Population.Conversation.RemoveTopicProvider(World.MatchTopics);
+                World.Population.Conversation.RemoveTopicProvider(World.PurchaseTopics);
+            }
+            World = world;
+        }
+
         void HandleBeforeDay()
         {
             var report = World.BeforeDayAdvance();

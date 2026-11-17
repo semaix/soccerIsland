@@ -71,6 +71,15 @@ namespace SoccerIsland.NPC.UnityIntegration
             Debug.Log($"[NPCManager] 島民 {Database.Count} 人を生成しました (seed={settings.seed}, {sw.ElapsedMilliseconds}ms)");
         }
 
+        /// <summary>外で作った島民データに差し替える（転生で次の人生を始めるとき）。イベントは出さない。</summary>
+        public void Adopt(IslandPopulation population)
+        {
+            if (Population != null) Population.Market.OnChanged -= RaiseMarketChanged;
+            Population = population;
+            Population.Market.OnChanged += RaiseMarketChanged;
+            LoadedFromSave = false;
+        }
+
         void Attach(IslandPopulation population)
         {
             if (Population != null) Population.Market.OnChanged -= RaiseMarketChanged;

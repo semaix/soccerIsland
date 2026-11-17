@@ -236,6 +236,24 @@ session.AutoPlay();                          // 残りおまかせ → 結果は
 
 「次の試合」の効果は試合が終わると切れる。
 
+## 確認用の画面（OnGUI）
+
+本番の2D画面ができるまで、エディタ上でゲーム全体を触れる仮UI。
+シーンに `NPCManager`・`WorldManager`・`CareerManager` を置き、さらに次を置く。
+
+- `IslandDebugHub`：島民（話す・スカウト・電話・デート・告白）／相関図／新聞／お金（銀行・闇金・株・toto・宝くじ）／お店（表・裏市場・持ち物）／練習・検定／大会／主人公（引退して次の人生へ）
+- `MatchDebugView`：ミーティング→試合→コーチング
+
+## 開発：Unity なしでのコンパイル確認とテスト
+
+```bash
+apt-get install -y mono-mcs mono-runtime   # 初回のみ
+./Tools/CompileCheck/run.sh
+```
+
+UnityEngine / UnityEditor の最小スタブで全スクリプト（エディタ拡張含む）をコンパイルし、EditMode テストを実行する。
+`Tools/` は `Assets` の外なので Unity には読み込まれない。
+
 ### 個人情報の方針
 
 - 端末（スマホ）内の個人情報は使わない：連絡先・電話番号・位置情報・カメラ・マイク・端末ID・端末名・広告ID・クリップボードを読まない。

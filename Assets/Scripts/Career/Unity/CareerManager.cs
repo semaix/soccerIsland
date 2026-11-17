@@ -82,6 +82,18 @@ namespace SoccerIsland.Career.UnityIntegration
             if (day.newspaper != null) OnNewspaper?.Invoke(day.newspaper);
         }
 
+        /// <summary>引退して次の人生を始める。島民・ワールド・主人公がすべて作り直される。</summary>
+        public LegacyRecord RetireAndStartNextLife()
+        {
+            var legacy = ReincarnationSystem.Retire(Career);
+            if (legacy == null) return null;
+            var next = ReincarnationSystem.StartNextCycle(legacy, Career.PastLives);
+            _npc.Adopt(next.Population);
+            _world.Adopt(next.World);
+            Career = next;
+            return legacy;
+        }
+
         /// <summary>NPCに話しかける（会話＋ファンのお願い）。</summary>
         public Interaction Interact(int npcId) => Career.Interact(npcId);
 
