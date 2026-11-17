@@ -25,7 +25,6 @@ namespace SoccerIsland.NPC
         public string talentRank = Unknown;
         public string effortRank = Unknown;
         public string phoneNumber = Unknown;
-        public string examGrade = Unknown;
         public int affinity;
         public bool isRegisteredKnown;
         public List<string> notes = new List<string>();
@@ -49,7 +48,6 @@ namespace SoccerIsland.NPC
             if (e.Knows(NPCInfoFlags.Talent)) v.talentRank = NPCLabels.Rank(npc.talent);
             if (e.Knows(NPCInfoFlags.Effort)) v.effortRank = NPCLabels.Rank(npc.effort);
             if (e.Knows(NPCInfoFlags.PhoneNumber) && !string.IsNullOrEmpty(npc.phoneNumber)) v.phoneNumber = npc.phoneNumber;
-            if (e.Knows(NPCInfoFlags.ExamGrade)) v.examGrade = npc.examGrade < 0 ? "未受験" : $"{ExamGrades.Label(npc.examGrade)}（{npc.examYear}年）";
             if (e.Knows(NPCInfoFlags.UndergroundSecret) && npc.isUnderground) v.notes.Add("裏の顔を持っている");
             if (e.Knows(NPCInfoFlags.MarketValue) && !npc.AppearsInOfficialRanking) v.notes.Add("サッカー協会に載っていない");
             if (npc.isIncarcerated) v.notes.Add($"服役中（{npc.releaseYear}年 出所予定）");

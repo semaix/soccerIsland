@@ -21,8 +21,6 @@ namespace SoccerIsland.Career
         public NewspaperIssue newspaper;
         public List<EconomyEvent> economyEvents = new List<EconomyEvent>();
         public List<FameEvent> fameEvents = new List<FameEvent>();
-        /// <summary>検定日の島民の結果（検定日以外は null）。</summary>
-        public List<ExamResult> exams;
         /// <summary>この日の朝にかかってきた電話。</summary>
         public List<IncomingCall> incomingCalls = new List<IncomingCall>();
     }
@@ -61,7 +59,6 @@ namespace SoccerIsland.Career
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
         WorldDayReport _pendingWorld;
-        List<ExamResult> _pendingExams;
 
         public IslandCareer(IslandWorld world, CareerSaveData save = null)
         {
@@ -127,7 +124,6 @@ namespace SoccerIsland.Career
             Betting.DrawIfDue();
             Bank.TickDay();
             if (Population.Database.currentDay % 30 == 29) Scouting.Payroll();
-            _pendingExams = AbilityExam.IsExamDay(Population.Database.currentDay) ? Exam.RunMonthlyExam() : null;
         }
 
         /// <summary>日付が進んだ後に呼ぶ。朝刊を発行する。</summary>
@@ -142,10 +138,8 @@ namespace SoccerIsland.Career
                 economyEvents = new List<EconomyEvent>(_economyEvents),
                 fameEvents = new List<FameEvent>(_fameEvents),
             };
-            report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents, _pendingExams);
-            report.exams = _pendingExams;
+            report.newspaper = Newspaper.Publish(Media, _pendingWorld, populationReport, _economyEvents, _fameEvents);
             report.incomingCalls = Phone.IncomingCalls();
-            _pendingExams = null;
             _economyEvents.Clear();
             _fameEvents.Clear();
             _pendingWorld = null;

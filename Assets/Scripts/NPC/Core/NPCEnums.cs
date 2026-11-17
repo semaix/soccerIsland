@@ -124,10 +124,9 @@ namespace SoccerIsland.NPC
         GrowthHint        = 1 << 11,
         PhoneNumber       = 1 << 12,
         UndergroundSecret = 1 << 13,
-        ExamGrade         = 1 << 14,
 
         Basic = Name | Age | Occupation,
         All = Name | Age | Occupation | Club | Personality | SoccerPersonality | Position |
-              Salary | MarketValue | Talent | Effort | GrowthHint | PhoneNumber | UndergroundSecret | ExamGrade,
+              Salary | MarketValue | Talent | Effort | GrowthHint | PhoneNumber | UndergroundSecret,
     }
 }

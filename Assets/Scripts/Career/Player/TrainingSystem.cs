@@ -26,13 +26,11 @@ namespace SoccerIsland.Career
         public float fatigue;
         public int partnerId = -1;
         public string partnerLine;
-        /// <summary>一緒に練習して感じた相手の実力（数値は出さない）。</summary>
-        public string impression;
     }
 
     /// <summary>
     /// 練習。1日3回まで。疲れると試合でガッツが減る。
-    /// 島民と一緒に練習すると伸びが良く、相手の実力が肌でわかる（数値は出ないがスカウトのヒントになる）。
+    /// 仲の良い島民と一緒に練習すると伸びが良く、好感度も上がる（相手の実力はわからない。手がかりは市場価値だけ）。
     /// </summary>
     public class TrainingSystem
     {
@@ -125,21 +123,9 @@ namespace SoccerIsland.Career
                 r.partnerId = partner.id;
                 entry.affinity = Math.Min(100, entry.affinity + 3);
                 _book.Reveal(partner.id, NPCInfoFlags.Effort | NPCInfoFlags.Position);
-                r.impression = Impression(partner, Primary(menu)[0]);
                 r.partnerLine = partner.effort >= 70 ? "まだまだ！ もう1本！" : partner.effort < 35 ? "ふー、今日はこのへんにしとこうぜ。" : "いい練習になったよ。";
             }
             return r;
-        }
-
-        /// <summary>一緒に練習した相手の実力を、言葉で伝える（数値は見せない）。</summary>
-        string Impression(NPCData partner, int stat)
-        {
-            int diff = partner.abilities[stat] - _player.abilities[stat] + _rng.Range(-4, 5);
-            if (diff >= 20) return $"{partner.FullName}は自分よりずっと上手い。次元が違う……";
-            if (diff >= 8) return $"{partner.FullName}のほうが一枚上手だ。";
-            if (diff >= -7) return $"{partner.FullName}とはいい勝負だ。";
-            if (diff >= -19) return $"{partner.FullName}にはまだ負けない。";
-            return $"{partner.FullName}は、正直まだまだだ。";
         }
 
         public void TickDay()

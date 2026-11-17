@@ -61,8 +61,6 @@ namespace SoccerIsland.NPC
             BuildRelations();
             AssignClubLeaders();
 
-            foreach (var npc in _db.npcs) AssignPastExam(npc);
-
             foreach (var npc in _db.npcs)
             {
                 npc.fame = RollFame(npc);
@@ -638,21 +636,6 @@ namespace SoccerIsland.NPC
             if (a == b || a.HasRelation(b.id)) return;
             a.relations.Add(new NPCRelation(b.id, typeAtoB, affinity));
             if (!b.HasRelation(a.id)) b.relations.Add(new NPCRelation(a.id, typeBtoA, affinity));
-        }
-
-        /// <summary>協会に登録している人の多くは、何年か前に能力検定を受けている（その当時の実力の級）。</summary>
-        void AssignPastExam(NPCData npc)
-        {
-            if (!npc.registeredWithAssociation || npc.isUnderground || npc.age < 12 || npc.age > 50 || !_rng.Chance(0.6f)) return;
-            int yearsAgo = Math.Min(npc.age - 10, _rng.Range(0, 6));
-            int pastAge = npc.age - yearsAgo;
-            // 当時の実力を成長曲線から逆算する
-            float now = GrowthCurve.Evaluate(npc.growthType, npc.age, npc.awakeningAge);
-            float then = GrowthCurve.Evaluate(npc.growthType, pastAge, npc.awakeningAge);
-            float ratio = now <= 0f ? 1f : then / now;
-            int pastOverall = (int)Math.Round(npc.PublicOverall * Math.Min(1.3f, ratio));
-            npc.examGrade = ExamGrades.FromOverall(pastOverall);
-            npc.examYear = _s.startYear - yearsAgo;
         }
 
         // ==================================================================

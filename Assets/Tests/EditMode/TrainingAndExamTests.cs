@@ -24,46 +24,6 @@ namespace SoccerIsland.NPC.Tests
         }
 
         [Test]
-        public void IslandersHavePastGradesThatCanBeOutdated()
-        {
-            var db = NewCareer().Population.Database;
-            var graded = db.npcs.Where(n => n.examGrade >= 0).ToList();
-            Assert.Greater(graded.Count, 200);
-            Assert.IsTrue(graded.All(n => n.registeredWithAssociation && !n.isUnderground), "裏の人間は検定を受けない");
-            // 覚醒した人は、覚醒前に受けた級のままだと今の実力より低い
-            int outdated = graded.Count(n => n.examGrade > ExamGrades.FromOverall(n.PublicOverall));
-            Assert.Greater(outdated, 0, "級が今の実力より低い掘り出し物がいる");
-        }
-
-        [Test]
-        public void TalkingRevealsExamGrade()
-        {
-            var c = NewCareer();
-            var npc = c.Population.Database.npcs.First(n => n.examGrade >= 0 && n.personality == Personality.Extrovert);
-            for (int d = 0; d < 6; d++) { c.Population.Talk(npc.id); c.AdvanceDay(); }
-            var p = c.Population.GetProfile(npc.id);
-            Assert.IsTrue(p.examGrade.StartsWith(ExamGrades.Label(npc.examGrade)), p.examGrade);
-        }
-
-        [Test]
-        public void MonthlyExamUpdatesGradesAndMakesNews()
-        {
-            var c = NewCareer();
-            var db = c.Population.Database;
-            var bloomer = db.npcs.Where(n => n.AppearsInOfficialRanking && n.age >= 15 && n.age <= 40).OrderByDescending(n => n.PublicOverall).First();
-            bloomer.examGrade = 10;
-            var results = c.Exam.RunMonthlyExam(1f);
-            var r = results.First(x => x.npcId == bloomer.id);
-            Assert.IsTrue(r.BigJump);
-            Assert.AreEqual(db.currentYear, bloomer.examYear);
-
-            // 検定日には新聞に載る
-            while (!AbilityExam.IsExamDay(db.currentDay)) c.AdvanceDay();
-            var report = c.AdvanceDay();
-            Assert.IsTrue(report.exams != null && report.exams.Count > 0);
-        }
-
-        [Test]
         public void ProtagonistExam()
         {
             var c = NewCareer();
@@ -98,7 +58,7 @@ namespace SoccerIsland.NPC.Tests
         }
 
         [Test]
-        public void TrainingWithAPartnerGivesAnImpression()
+        public void TrainingWithAPartnerHelpsButRevealsNoAbility()
         {
             var c = NewCareer();
             var partner = c.Population.Database.npcs.First(n => n.abilities.dribbling >= 75);
@@ -106,8 +66,7 @@ namespace SoccerIsland.NPC.Tests
             c.Population.Knowledge.GetOrCreate(partner.id).affinity = 50;
             var r = c.Training.Train(TrainingMenu.Dribbling, partner.id);
             Assert.IsTrue(r.done);
-            Assert.IsTrue(r.impression.Contains(partner.FullName));
-            Assert.IsTrue(r.impression.Contains("上手") || r.impression.Contains("次元"), r.impression);
+            Assert.IsTrue(!r.partnerLine.Contains("上手") && !r.partnerLine.Contains("次元"), "相手の実力はわからない");
             Assert.AreEqual(53, c.Population.Knowledge.Get(partner.id).affinity);
             Assert.IsTrue(c.Population.Knowledge.Knows(partner.id, NPCInfoFlags.Effort));
         }
