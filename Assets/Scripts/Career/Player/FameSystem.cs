@@ -13,6 +13,7 @@ namespace SoccerIsland.Career
         FanServiceGood,    // 神対応
         FanServiceBad,     // 塩対応
         FameMilestone,     // 知名度の節目
+        MatchFixingExposed, // 八百長がばれた
     }
 
     public struct FameEvent
@@ -107,6 +108,13 @@ namespace SoccerIsland.Career
                 if (before < m && _player.fame >= m)
                     _events.Add(new FameEvent { type = FameEventType.FameMilestone, day = _today(), npcId = -1, fameDelta = m });
             return _player.fame - before;
+        }
+
+        /// <summary>八百長がばれたとき。知名度が大きく下がり、新聞に載る。</summary>
+        public void ReportMatchFixingExposed(string matchName)
+        {
+            float d = AddFame(-15f);
+            _events.Add(new FameEvent { type = FameEventType.MatchFixingExposed, day = _today(), npcId = -1, fameDelta = d, text = matchName });
         }
 
         /// <summary>しばらく試合に出ないと忘れられていく。</summary>

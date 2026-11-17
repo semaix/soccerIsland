@@ -1,0 +1,394 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+using SoccerIsland.Career;
+using SoccerIsland.Match;
+using SoccerIsland.World;
+
+namespace SoccerIsland.NPC.Tests
+{
+    public class MatchTests
+    {
+        static IslandCareer _career;
+        static IslandCareer Career()
+        {
+            if (_career == null)
+                _career = new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault())));
+            return _career;
+        }
+
+        static IslandCareer FreshCareer() =>
+            new IslandCareer(new IslandWorld(IslandPopulation.CreateNew(NPCGenerationSettings.CreateDefault())));
+
+        static List<SoccerIsland.World.Match> NormalMatches(IslandCareer c) =>
+            c.World.State.matches.Where(m => m.awayLineup.Count > 0 && !m.IsUnderground && m.category != MatchCategory.PrisonLeague).ToList();
+
+        static MatchSetup Setup(int i, Position? pos = null)
+        {
+            var c = Career();
+            if (pos.HasValue) c.Player.position = pos.Value;
+            var ms = NormalMatches(c);
+            var s = MatchFactory.FromWorldMatch(c, ms[i % ms.Count], Side.Home, i + 1);
+            c.Player.position = Position.MF;
+            return s;
+        }
+
+        static MatchPlayer P(Personality p, SoccerPersonality sp, Position pos = Position.MF, float tension = 60f)
+        {
+            var stats = new NPCAbilities();
+            for (int i = 0; i < NPCAbilities.StatCount; i++) stats[i] = 50;
+            return new MatchPlayer { name = sp + "/" + p, personality = p, soccerPersonality = sp, position = pos, stats = stats, tension = tension, maxGuts = 600, guts = 600 };
+        }
+
+        // ---------------- 性格バランス ----------------
+
+        [Test]
+        public void BalancedTeamHasBetterChemistry()
+        {
+            var balanced = new List<MatchPlayer>
+            {
+                P(Personality.Introvert, SoccerPersonality.Egoist), P(Personality.Extrovert, SoccerPersonality.Devoted),
+                P(Personality.Gloomy, SoccerPersonality.Devoted), P(Personality.Extrovert, SoccerPersonality.MoodMaker),
+                P(Personality.Introvert, SoccerPersonality.Sense), P(Personality.Gloomy, SoccerPersonality.Fighter),
+            };
+            var bad = new List<MatchPlayer>
+            {
+                P(Personality.Gloomy, SoccerPersonality.Egoist), P(Personality.Gloomy, SoccerPersonality.Egoist),
+                P(Personality.Gloomy, SoccerPersonality.Egoist), P(Personality.Gloomy, SoccerPersonality.Hysteric),
+                P(Personality.Gloomy, SoccerPersonality.Hysteric), P(Personality.Introvert, SoccerPersonality.Sense),
+            };
+            var a = TeamChemistry.Evaluate(balanced);
+            var b = TeamChemistry.Evaluate(bad);
+            Assert.Greater(a.score, 20f);
+            Assert.Less(b.score, -20f);
+            Assert.IsTrue(b.reasons.Any(r => r.Contains("エゴイスト同士")));
+            Assert.Greater(b.cardRisk, a.cardRisk);
+        }
+
+        // ---------------- ミーティング ----------------
+
+        [Test]
+        public void MeetingReactionsDependOnPersonalityAndCanStartArguments()
+        {
+            var ego = P(Personality.Extrovert, SoccerPersonality.Egoist, Position.FW);
+            var dev = P(Personality.Introvert, SoccerPersonality.Devoted, Position.DF);
+            var team = new MatchTeam { players = { ego, dev, P(Personality.Gloomy, SoccerPersonality.Fighter) } };
+            var r = Meeting.Hold(team, MeetingTopic.Defend, new SeededRandom(1));
+            Assert.Less(ego.tension, 60f, "エゴイストは守備的な方針が嫌い");
+            Assert.Greater(dev.tension, 60f, "献身的は守備的な方針が好き");
+            Assert.AreEqual(1, r.arguments.Count, "エゴイストと献身的が口論する");
+            Assert.Less(r.moodDelta, 0f);
+
+            var sense = P(Personality.Extrovert, SoccerPersonality.Sense);
+            var team2 = new MatchTeam { players = { sense } };
+            Meeting.Hold(team2, MeetingTopic.Freedom, new SeededRandom(1));
+            Assert.AreEqual(85f, sense.tension, 0.01f);
+
+            var trap = new MatchTeam { players = { dev } };
+            Meeting.Hold(trap, MeetingTopic.OffsideTrapPlan, new SeededRandom(1));
+            Assert.IsTrue(trap.offsideTrapPlanned);
+        }
+
+        // ---------------- コーチング ----------------
+
+        [Test]
+        public void CoachingThatMeetsTheDemandWorks()
+        {
+            var rng = new SeededRandom(3);
+            var mood = P(Personality.Extrovert, SoccerPersonality.MoodMaker, tension: 30f);
+            var team = new MatchTeam { players = { mood } };
+            var opp = new MatchTeam();
+            bool got = false;
+            for (int m = 0; m < 300 && !got; m += 8) got = Coaching.UpdateDemand(mood, team, opp, m, rng);
+            Assert.IsTrue(got);
+            Assert.AreEqual(CoachingCommand.Praise, mood.demand.Value);
+
+            var r = Coaching.CoachPlayer(mood, CoachingCommand.Praise, 50f, rng);
+            Assert.IsTrue(r.metDemand && r.accepted);
+            Assert.AreEqual(50f, mood.tension, 0.01f);
+            Assert.IsTrue(!mood.demand.HasValue);
+
+            var hyst = P(Personality.Extrovert, SoccerPersonality.Hysteric, tension: 50f);
+            Coaching.CoachPlayer(hyst, CoachingCommand.Scold, 80f, rng);
+            Assert.AreEqual(90f, hyst.tension, 0.01f, "ヒステリーを叱ると爆発する");
+
+            var shy = P(Personality.Introvert, SoccerPersonality.Devoted, tension: 50f);
+            Coaching.CoachPlayer(shy, CoachingCommand.Scold, 80f, rng);
+            Assert.AreEqual(30f, shy.tension, 0.01f, "内向的な人は叱られると萎縮する");
+        }
+
+        // ---------------- 試合 ----------------
+
+        [Test]
+        public void MatchesFinishWithReasonableScores()
+        {
+            double goals = 0;
+            for (int i = 0; i < 40; i++)
+            {
+                var e = new MatchEngine(Setup(i));
+                var r = e.RunToEnd();
+                Assert.IsTrue(e.Finished);
+                Assert.GreaterOrEqual(e.Minute, 90f);
+                goals += r.homeScore + r.awayScore;
+                Assert.IsTrue(r.log.Any(x => x.type == MatchEventType.HalfTime));
+            }
+            double avg = goals / 40;
+            Assert.Greater(avg, 1.0);
+            Assert.Less(avg, 6.0);
+        }
+
+        [Test]
+        public void ProtagonistGetsCommandPrompts()
+        {
+            var e = new MatchEngine(Setup(1));
+            var kinds = new HashSet<PromptKind>();
+            int prompts = 0;
+            while (true)
+            {
+                var p = e.Advance();
+                if (p == null) break;
+                prompts++;
+                kinds.Add(p.kind);
+                Assert.IsTrue(p.actor.isProtagonist);
+                Assert.Throws<ArgumentException>(() => e.Choose(MatchCommand.MissOnPurpose)); // 八百長ミッションがないので選べない
+                e.Choose(p.kind == PromptKind.Attack ? (p.zone >= 5 ? MatchCommand.Shoot : MatchCommand.Pass) : MatchCommand.Tackle,
+                         p.passTargets.FirstOrDefault());
+            }
+            Assert.Greater(prompts, 5);
+            Assert.IsTrue(kinds.Contains(PromptKind.Attack) && kinds.Contains(PromptKind.Defend));
+        }
+
+        [Test]
+        public void DribblingLowersTrustButCreatingChancesRaisesIt()
+        {
+            int lowered = 0, raised = 0;
+            for (int i = 0; i < 20; i++)
+            {
+                var e = new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) };
+                e.RunToEnd();
+                lowered += e.Log.Count(x => x.type == MatchEventType.TrustChanged && x.value < 0 && x.text.Contains("ドリブル"));
+                raised += e.Log.Count(x => x.type == MatchEventType.TrustChanged && x.value > 5 && x.text.Contains("チャンス"));
+            }
+            Assert.Greater(lowered, 0);
+            Assert.Greater(raised, 0);
+        }
+
+        [Test]
+        public void PassivePlayTanksTrust()
+        {
+            float normal = 0, passive = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                normal += new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) }.RunToEnd().trust;
+                passive += new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) { passive = true } }.RunToEnd().trust;
+            }
+            Assert.Less(passive / 10, 25f, "消極的だと一気に下がる");
+            Assert.Greater(normal / 10, passive / 10 + 30f);
+        }
+
+        [Test]
+        public void TeammatesPassToTrustedProtagonistMore()
+        {
+            int lowTouches = 0, highTouches = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                lowTouches += TouchesWithFixedTrust(i, 5f);
+                highTouches += TouchesWithFixedTrust(i, 95f);
+            }
+            Assert.Greater(highTouches, lowTouches);
+        }
+
+        static int TouchesWithFixedTrust(int seed, float trust)
+        {
+            var e = new MatchEngine(Setup(seed));
+            var ctrl = new FixedTrustController(trust);
+            e.Controller = ctrl;
+            e.ChangeTrust(trust - e.Trust, "test");
+            e.RunToEnd();
+            return ctrl.attackPrompts;
+        }
+
+        class FixedTrustController : IMatchController
+        {
+            readonly float _trust;
+            public int attackPrompts;
+            public FixedTrustController(float t) { _trust = t; }
+            public MatchChoice Decide(MatchEngine e, MatchPrompt p)
+            {
+                e.ChangeTrust(_trust - e.Trust, "test");
+                if (p.kind == PromptKind.Attack) { attackPrompts++; return new MatchChoice(p.options.Contains(MatchCommand.Pass) ? MatchCommand.Pass : MatchCommand.Dribble); }
+                return new MatchChoice(MatchCommand.PassCut);
+            }
+        }
+
+        // ---------------- ミッション ----------------
+
+        [Test]
+        public void CrampedProtagonistCanOnlyCoach()
+        {
+            var s = Setup(2);
+            s.missions.Add(new CrampMission(30));
+            var e = new MatchEngine(s);
+            bool coached = false;
+            while (true)
+            {
+                var p = e.Advance();
+                if (p == null) break;
+                Assert.Less(e.Minute, 31f, "足がつった後はボールに関われない");
+                e.Choose(p.options[0], p.passTargets.FirstOrDefault());
+                if (e.Protagonist.cramped && !coached && e.CanCoach) coached = !e.Coach(CoachingCommand.GoForward).notAllowed;
+            }
+            // 試合終了まで指示だけで進める
+            Assert.IsTrue(e.Protagonist.cramped);
+            var r = e.Result();
+            Assert.AreEqual(1, r.missions.Count);
+            Assert.AreEqual(r.ProtagonistWon ? MissionStatus.Success : MissionStatus.Failed, r.missions[0].status);
+        }
+
+        [Test]
+        public void CoachingWorksWhileCramped()
+        {
+            var s = Setup(3);
+            s.missions.Add(new CrampMission(0));
+            var e = new MatchEngine(s) { Controller = new AutoPilot() };
+            int accepted = 0;
+            e.OnEvent += ev => { if (ev.type == MatchEventType.Demand && e.CanCoach) { var r = e.Coach(ev.actor.demand ?? CoachingCommand.Praise, ev.actor); if (r.metDemand) accepted++; } };
+            e.RunToEnd();
+            Assert.IsTrue(e.Protagonist.cramped);
+            Assert.Greater(accepted, 0, "要求に応える指示が出せる");
+        }
+
+        [Test]
+        public void OffsideTrapMissionCountsTraps()
+        {
+            int best = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                var s = Setup(i, Position.DF);
+                s.home.offsideTrapPlanned = true;
+                s.missions.Add(new OffsideTrapMission(5));
+                var e = new MatchEngine(s) { Controller = new AutoPilot(i) { trapper = true } };
+                var r = e.RunToEnd();
+                best = Math.Max(best, e.OffsideTrapsSucceeded);
+                Assert.AreEqual(e.OffsideTrapsSucceeded >= 5 ? MissionStatus.Success : MissionStatus.Failed, r.missions[0].status);
+                Assert.AreEqual(e.OffsideTrapsSucceeded, r.log.Count(x => x.type == MatchEventType.OffsideTrapSuccess && x.side == Side.Home));
+            }
+            Assert.Greater(best, 0);
+        }
+
+        [Test]
+        public void ObviousMatchFixingGetsExposed()
+        {
+            float obvious = 0, subtle = 0;
+            int exposed = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                var s1 = Setup(i); s1.crowd = 2000; s1.missions.Add(new ThrowMatchMission());
+                var r1 = new MatchEngine(s1) { Controller = new AutoPilot(i) { throwing = true, subtle = false } }.RunToEnd();
+                obvious += r1.suspicion;
+                if (r1.fixingExposed) { exposed++; Assert.AreEqual(MissionStatus.Failed, r1.missions[0].status); }
+
+                var s2 = Setup(i); s2.missions.Add(new ThrowMatchMission());
+                subtle += new MatchEngine(s2) { Controller = new AutoPilot(i) { throwing = true, subtle = true } }.RunToEnd().suspicion;
+            }
+            Assert.Greater(exposed, 0, "露骨な八百長はばれる");
+            Assert.Less(subtle, obvious);
+            Assert.AreEqual(0f, subtle, 0.01f, "目立たない手抜きは疑われない");
+        }
+
+        [Test]
+        public void ShowboatingProducesBeautifulSkills()
+        {
+            int normal = 0, flair = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                normal += new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) }.RunToEnd().protagonist.beautifulSkills;
+                flair += new MatchEngine(Setup(i)) { Controller = new AutoPilot(i) { showboat = true } }.RunToEnd().protagonist.beautifulSkills;
+            }
+            Assert.Greater(flair, normal);
+        }
+
+        [Test]
+        public void PublicMatchesHideUndergroundStrength()
+        {
+            var db = Career().Population.Database;
+            var hidden = db.npcs.FirstOrDefault(n => n.publicPerformanceRate < 0.9f);
+            Assume.That(hidden == null ? 0 : 1, Is.GreaterThan(0));
+            var pub = MatchFactory.FromNPC(hidden, false, new SeededRandom(1));
+            var real = MatchFactory.FromNPC(hidden, true, new SeededRandom(1));
+            Assert.Greater(real.stats.Overall(hidden.position), pub.stats.Overall(hidden.position));
+        }
+
+        // ---------------- 島への反映 ----------------
+
+        [Test]
+        public void ResultIsAppliedToTheIsland()
+        {
+            var c = FreshCareer();
+            var wm = c.World.TodaysMatches().FirstOrDefault(m => m.awayLineup.Count > 0 && !m.IsUnderground)
+                     ?? NormalMatches(c).First();
+            while (c.Population.Database.currentDay < wm.day) c.AdvanceDay();
+
+            var setup = MatchFactory.FromWorldMatch(c, wm, Side.Home);
+            var r = new MatchEngine(setup) { Controller = new AutoPilot() }.RunToEnd();
+            float fameBefore = c.Player.fame;
+            MatchResultApplier.Apply(c, setup, r);
+
+            Assert.IsTrue(wm.played);
+            Assert.AreEqual(r.homeScore, wm.homeScore);
+            Assert.AreEqual(1, c.Player.matchesPlayed);
+            Assert.AreNotEqual(fameBefore, c.Player.fame);
+
+            var report = c.AdvanceDay();
+            Assert.IsTrue(!report.world.playedMatches.Contains(wm), "主人公が戦った試合は自動計算されない");
+            Assert.AreEqual(r.homeScore, wm.homeScore);
+        }
+
+        [Test]
+        public void ExposedFixingHitsFameAndNews_SuccessfulFixingHalvesLoan()
+        {
+            var c = FreshCareer();
+            c.Player.fame = 40;
+            c.Player.blackMarketAccess = true;
+            var loan = c.Bank.Borrow(Lender.LoanShark, 1000000, 10);
+            var ms = NormalMatches(c);
+
+            var s = MatchFactory.FromWorldMatch(c, ms[0], Side.Home, 5);
+            s.missions.Add(new ThrowMatchMission(loan.id));
+            var exposed = new MatchResult { homeScore = 0, awayScore = 1, protagonistSide = Side.Home, suspicion = 100, fixingExposed = true, protagonist = s.home.Protagonist };
+            MatchResultApplier.Apply(c, s, exposed);
+            Assert.Less(c.Player.fame, 40f);
+            Assert.IsTrue(c.AdvanceDay().newspaper.articles.Any(a => a.title.Contains("八百長")));
+            Assert.Greater(loan.balance, 1000000 * 0.9);
+
+            var s2 = MatchFactory.FromWorldMatch(c, ms[1], Side.Home, 6);
+            s2.missions.Add(new ThrowMatchMission(loan.id));
+            double before = loan.balance;
+            var quiet = new MatchResult { homeScore = 0, awayScore = 2, protagonistSide = Side.Home, suspicion = 10, protagonist = s2.home.Protagonist };
+            MatchResultApplier.Apply(c, s2, quiet);
+            Assert.Less(Math.Abs(loan.balance - before / 2), 1.0, "八百長成功で借金が半分");
+        }
+
+        [Test]
+        public void SessionRunsMeetingMatchAndApplies()
+        {
+            var c = FreshCareer();
+            var wm = NormalMatches(c).First();
+            var setup = MatchFactory.FromWorldMatch(c, wm, Side.Home, 3);
+            setup.missions.Add(new WinMission());
+            var session = new MatchSession(c, setup);
+            Assert.IsTrue(session.Diagnose().reasons.Count > 0);
+            var meeting = session.HoldMeeting(MeetingTopic.Enjoy);
+            Assert.IsTrue(meeting != null && meeting.reactions.Count >= 10);
+
+            var prompt = session.Advance();
+            Assert.IsTrue(prompt != null, "主人公の出番が来る");
+            var result = session.AutoPlay();
+            Assert.AreEqual(MatchSession.Phase.Finished, session.Current);
+            Assert.IsTrue(wm.played);
+            Assert.AreEqual(1, result.missions.Count);
+            Assert.AreEqual(1, c.Player.matchesPlayed);
+        }
+    }
+}

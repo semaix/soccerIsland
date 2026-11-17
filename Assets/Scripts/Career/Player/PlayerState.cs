@@ -60,6 +60,18 @@ namespace SoccerIsland.Career
         public int assists;
         public int lastMatchDay = -1;
 
+        // ---- 選手としての能力（主人公は自分の能力を知っている） ----
+        public Position position = Position.MF;
+        public NPCAbilities abilities = DefaultAbilities();
+
+        public static NPCAbilities DefaultAbilities()
+        {
+            var a = new NPCAbilities();
+            for (int i = 0; i < NPCAbilities.StatCount; i++) a[i] = 58;
+            a.goalkeeping = 15;
+            return a;
+        }
+
         // ---- 自作 ----
         public SignatureDesign signature = new SignatureDesign();
         public List<GoalPerformanceDesign> goalPerformances = new List<GoalPerformanceDesign>();

@@ -5,6 +5,7 @@
         "SoccerIsland.NPC",
         "SoccerIsland.World",
         "SoccerIsland.Career",
+        "SoccerIsland.Match",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
