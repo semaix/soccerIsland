@@ -71,6 +71,8 @@ namespace SoccerIsland.Career
         public TownReputation Towns { get; }
         public Hospital Hospital { get; }
         public PoliceBox Police { get; }
+        public DailySchedule Schedule { get; }
+        public TimeOfDay Now => (TimeOfDay)Player.timeOfDay;
 
         readonly List<EconomyEvent> _economyEvents = new List<EconomyEvent>();
         readonly List<FameEvent> _fameEvents = new List<FameEvent>();
@@ -111,8 +113,10 @@ namespace SoccerIsland.Career
             Towns = new TownReputation(Player, Events);
             world.Population.Conversation.affinityModifier = Towns.ModifyAffinityGain;
             Fans.townMultiplier = Towns.FanMultiplier;
+            world.protagonistAge = () => Player.age;
             Hospital = new Hospital(Player, world.Population);
             Police = new PoliceBox(Player, world.Population, Economy, _fameEvents, rng);
+            Schedule = new DailySchedule(db, world.State);
             Inventory = new InventorySystem(Player, world.State, Fame, today);
             BlackMarket.inventory = Inventory;
             Romance = new RomanceSystem(Player, world.Population, world.State, save?.romance ?? new RomanceState(), _fameEvents, rng);
@@ -166,6 +170,7 @@ namespace SoccerIsland.Career
             Fame.TickDay();
             Training.TickDay();
             if (Population.Database.currentDay % 365 == 0) Player.age++;
+            RewardSeasonAwards();
             var report = new CareerDayReport
             {
                 world = _pendingWorld,
@@ -179,6 +184,36 @@ namespace SoccerIsland.Career
             _fameEvents.Clear();
             _pendingWorld = null;
             return report;
+        }
+
+        /// <summary>年間表彰を受けた人は話題になる。主人公なら知名度が大きく上がる。</summary>
+        void RewardSeasonAwards()
+        {
+            var aw = World.League.League.LastAwards;
+            if (aw == null || aw.announcedDay != Population.Database.currentDay) return;
+            foreach (var id in new[] { aw.topScorerId, aw.mvpId, aw.rookieId })
+            {
+                if (id == -1) Fame.AddFame(8f);
+                else if (id >= 0) { var n = Population.Database.Get(id); if (n != null) Population.Market.AddHype(n, 0.25f, "season_award"); }
+            }
+        }
+
+        /// <summary>
+        /// 時間を進める（朝→昼→夕方→深夜→次の日の朝）。深夜の次で日付が変わる。
+        /// 日付が変わったときだけ CareerDayReport を返す。
+        /// </summary>
+        public CareerDayReport AdvanceTime()
+        {
+            if (Player.timeOfDay < (int)TimeOfDay.Night) { Player.timeOfDay++; return null; }
+            Player.timeOfDay = (int)TimeOfDay.Morning;
+            return AdvanceDay();
+        }
+
+        /// <summary>その島民が今どこにいるか。</summary>
+        public IslandPlace WhereIs(int npcId)
+        {
+            var n = Population.Database.Get(npcId);
+            return n == null ? IslandPlace.Home : Schedule.WhereIs(n, Population.Database.currentDay, Now);
         }
 
         /// <summary>テスト・ツール用：ワールド・島民・主人公をまとめて1日進める。</summary>

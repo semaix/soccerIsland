@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using SoccerIsland.NPC;
 
@@ -28,6 +29,7 @@ namespace SoccerIsland.World
         public ShopSimulator Shops { get; }
         public MatchTopicProvider MatchTopics { get; }
         public PurchaseTopicProvider PurchaseTopics { get; }
+        public LeagueSystem League { get; }
 
         public IslandWorld(IslandPopulation population, WorldState state = null)
         {
@@ -42,6 +44,7 @@ namespace SoccerIsland.World
             Shops = new ShopSimulator(db, State, rng);
             MatchTopics = new MatchTopicProvider(State);
             PurchaseTopics = new PurchaseTopicProvider(State);
+            League = new LeagueSystem(db, State);
 
             population.Conversation.AddTopicProvider(MatchTopics);
             population.Conversation.AddTopicProvider(PurchaseTopics);
@@ -60,16 +63,21 @@ namespace SoccerIsland.World
             {
                 if (m.played) continue;
                 Matches.Play(m);
+                League.Record(m);
                 report.playedMatches.Add(m);
             }
             report.purchases = Shops.TickDay(today);
             return report;
         }
 
-        /// <summary>日付が進んだ後に呼ぶ。先の試合予定を作り、古い試合を消す。</summary>
+        /// <summary>主人公の年齢（新人王の判定に使う）。Career 側が差し込む。</summary>
+        public Func<int> protagonistAge = () => 99;
+
+        /// <summary>日付が進んだ後に呼ぶ。先の試合予定を作り、古い試合を消す。年が変わればリーグの表彰。</summary>
         public void AfterDayAdvance()
         {
             int today = Population.Database.currentDay;
+            if (today > 0 && today % 365 == 0) League.CloseSeason(protagonistAge());
             Scheduler.EnsureScheduledThrough(today + scheduleAheadDays);
             State.matches.RemoveAll(m => m.played && m.day < today - keepPlayedMatchDays);
         }

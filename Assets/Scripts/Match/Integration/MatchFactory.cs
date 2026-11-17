@@ -24,6 +24,8 @@ namespace SoccerIsland.Match
                 tension = 55f + rng.Range(-10f, 10f) + (n.soccerPersonality == SoccerPersonality.MoodMaker ? 10f : 0f),
             };
             p.specials = SpecialMoveLibrary.ForNPC(n, stats);
+            p.age = n.age;
+            foreach (var r in n.relations) if (r.type == RelationType.Mentor) p.mentorIds.Add(r.targetId);
             p.RememberNaturalPosition();
             p.guts = p.maxGuts;
             return p;
@@ -51,6 +53,7 @@ namespace SoccerIsland.Match
                 personality = Personality.Extrovert, soccerPersonality = SoccerPersonality.Devoted,
                 maxGuts = (int)Math.Round((300 + s.abilities.stamina * 6 + s.level * 10) * (1f - s.fatigue / 200f)), tension = 65f,
                 specials = ProtagonistSpecials(s.level),
+                age = s.age,
             };
             if (s.matchBuffs.Contains(MatchBuff.Hype)) p.tension = Math.Min(100f, p.tension + 12f);
             if (s.matchBuffs.Contains(MatchBuff.Headband)) p.tension = Math.Min(100f, p.tension + 6f);

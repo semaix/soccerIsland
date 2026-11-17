@@ -32,6 +32,8 @@ namespace SoccerIsland.World
             float away = Strength(m.awayLineup, m.IsUnderground, mainlandStrength);
             m.homeScore = Poisson(baseGoals * (float)Math.Exp((home - away) / 15f));
             m.awayScore = Poisson(baseGoals * (float)Math.Exp((away - home) / 15f));
+            m.homeScorers = PickScorers(m.homeLineup, m.homeScore, m.IsUnderground);
+            m.awayScorers = PickScorers(m.awayLineup, m.awayScore, m.IsUnderground);
             m.played = true;
 
             // 勝ったチームは少し話題になる。島代表・地域対抗は注目度が高い
@@ -57,6 +59,24 @@ namespace SoccerIsland.World
                 if (n != null) sum += underground ? n.Overall : n.PublicOverall;
             }
             return sum / lineup.Count;
+        }
+
+        /// <summary>得点者：シュートがうまいFWほど点を取る。</summary>
+        List<int> PickScorers(List<int> lineup, int goals, bool underground)
+        {
+            var result = new List<int>();
+            if (lineup.Count == 0 || goals <= 0) return result;
+            var w = new float[lineup.Count];
+            for (int i = 0; i < lineup.Count; i++)
+            {
+                var n = _db.Get(lineup[i]);
+                if (n == null) continue;
+                float shoot = underground ? n.abilities.shooting : n.abilities.shooting * n.publicPerformanceRate;
+                float pos = n.position == Position.FW ? 3f : n.position == Position.MF ? 1.5f : n.position == Position.DF ? 0.5f : 0.02f;
+                w[i] = Math.Max(0.01f, (float)Math.Pow(shoot / 50f, 3) * pos);
+            }
+            for (int g = 0; g < goals; g++) result.Add(lineup[_rng.WeightedIndex(w)]);
+            return result;
         }
 
         int Poisson(float lambda)

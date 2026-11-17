@@ -33,6 +33,9 @@ namespace SoccerIsland.World
         public bool played;
         public int homeScore;
         public int awayScore;
+        /// <summary>得点者（NPC ID。-1 は主人公）。ゴールの数だけ並ぶ。</summary>
+        public List<int> homeScorers = new List<int>();
+        public List<int> awayScorers = new List<int>();
 
         public bool IsUnderground => category == MatchCategory.UndergroundFutsal;
         public bool Involves(int npcId) => homeLineup.Contains(npcId) || awayLineup.Contains(npcId);

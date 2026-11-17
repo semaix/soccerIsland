@@ -44,7 +44,18 @@ namespace SoccerIsland.Match.UnityIntegration
 
             var db = c.Population.Database;
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"{db.currentYear}年 {db.currentDay}日目　{c.Player.name}（{c.Player.age}歳・{c.Player.cycle}周目）　所持金 {NPCLabels.Yen(c.Player.cash)}　知名度 {c.Player.fame:0}");
+            GUILayout.Label($"{db.currentYear}年 {db.currentDay}日目 {DailySchedule.Label(c.Now)}　{c.Player.name}（{c.Player.age}歳・{c.Player.cycle}周目）　所持金 {NPCLabels.Yen(c.Player.cash)}　知名度 {c.Player.fame:0}");
+            if (GUILayout.Button("時間を進める", GUILayout.Width(120)))
+            {
+                if (c.Now == TimeOfDay.Night)
+                {
+                    CareerManager.Instance.OnCareerDay += Capture;
+                    c.Player.timeOfDay = (int)TimeOfDay.Morning;
+                    NPCManager.Instance.AdvanceDay();
+                    CareerManager.Instance.OnCareerDay -= Capture;
+                }
+                else c.Player.timeOfDay++;
+            }
             if (GUILayout.Button("1日進める", GUILayout.Width(120)))
             {
                 CareerManager.Instance.OnCareerDay += Capture;
@@ -114,6 +125,7 @@ namespace SoccerIsland.Match.UnityIntegration
         {
             var p = c.Population.GetProfile(n.id);
             GUILayout.Label($"{p.name}（{p.age}）{p.occupation}　{p.town}");
+            GUILayout.Label($"今いる場所：{DailySchedule.PlaceName(n, c.WhereIs(n.id))}（{DailySchedule.Label(c.Now)}）");
             GUILayout.Label($"クラブ {p.club}　ポジション {p.position}");
             GUILayout.Label($"性格 {p.personality} / {p.soccerPersonality}");
             GUILayout.Label($"年俸 {p.salary}　市場価値 {p.marketValue}");
@@ -154,6 +166,12 @@ namespace SoccerIsland.Match.UnityIntegration
 
         void DrawRelations(IslandCareer c)
         {
+            var standings = c.World.League.Table();
+            GUILayout.Label($"── 協会リーグ {c.World.League.League.season}年 ──");
+            for (int i = 0; i < Math.Min(8, standings.Count); i++)
+                GUILayout.Label($"{i + 1}位 {standings[i].name}　勝点{standings[i].Points}（{standings[i].won}勝{standings[i].drawn}分{standings[i].lost}敗）");
+            foreach (var sc in c.World.League.TopScorers(5))
+                GUILayout.Label($"得点ランキング　{(sc.npcId == -1 ? c.Player.name : c.Population.Database.Get(sc.npcId)?.FullName)}　{sc.goals}点");
             var db = c.Population.Database;
             GUILayout.Label($"わかっている関係：{c.Population.Knowledge.knownRelations.Count}本");
             foreach (var r in c.Population.Knowledge.knownRelations)

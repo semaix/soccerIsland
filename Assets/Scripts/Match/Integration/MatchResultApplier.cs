@@ -21,7 +21,17 @@ namespace SoccerIsland.Match
                 {
                     m.homeScore = result.homeScore;
                     m.awayScore = result.awayScore;
+                    m.homeScorers.Clear();
+                    m.awayScorers.Clear();
+                    foreach (var e in result.log)
+                    {
+                        if (e.type != MatchEventType.Goal || e.actor == null) continue;
+                        int id = e.actor.isProtagonist ? -1 : e.actor.npcId;
+                        if (id < -1) continue; // 島民でない助っ人
+                        (e.side == Side.Home ? m.homeScorers : m.awayScorers).Add(id);
+                    }
                     m.played = true; // 当日の自動計算はスキップされる
+                    career.World.League.Record(m);
                 }
             }
 

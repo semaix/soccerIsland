@@ -46,6 +46,7 @@ namespace SoccerIsland.Career
             if (population != null) { AddMarket(a, population.headlines); AddLife(a, population.lifeEvents); }
             if (economyEvents != null) foreach (var e in economyEvents) AddEconomy(a, e);
             if (fameEvents != null) foreach (var e in fameEvents) AddFame(a, e);
+            AddSeasonAwards(a, issue.day);
             if (_rng.Chance(gossipChancePerDay)) AddGossip(a);
             if (issue.day % 7 == 0) AddRanking(a);
             if (issue.day % 30 == 0) AddVote(a, media);
@@ -89,6 +90,26 @@ namespace SoccerIsland.Career
                     npcIds = new List<int>(m.homeLineup),
                 });
             }
+        }
+
+        string PlayerName(int id) => id == -1 ? _player.name : _db.Get(id)?.FullName ?? "？？？";
+
+        /// <summary>年が変わった日の朝刊：協会リーグの年間表彰。</summary>
+        void AddSeasonAwards(List<Article> a, int day)
+        {
+            var aw = _world.league.LastAwards;
+            if (aw == null || aw.announcedDay != day) return;
+            var lines = new List<string>();
+            if (aw.championClubId >= 0) lines.Add($"優勝　{aw.championName}");
+            if (aw.topScorerId != int.MinValue) lines.Add($"得点王　{PlayerName(aw.topScorerId)}（{aw.topScorerGoals}点）");
+            if (aw.mvpId != int.MinValue) lines.Add($"MVP　{PlayerName(aw.mvpId)}");
+            if (aw.rookieId != int.MinValue) lines.Add($"新人王　{PlayerName(aw.rookieId)}（{aw.rookieGoals}点）");
+            bool player = aw.Includes(-1);
+            var ids = new List<int>();
+            foreach (var id in new[] { aw.topScorerId, aw.mvpId, aw.rookieId }) if (id >= 0) ids.Add(id);
+            a.Add(new Article { category = ArticleCategory.Ranking, priority = player ? 99 : 88, aboutPlayer = player, npcIds = ids,
+                title = $"{aw.season}年 協会リーグ 年間表彰" + (aw.championClubId >= 0 ? $"　優勝は{aw.championName}" : ""),
+                body = string.Join("\n", lines) });
         }
 
         int MajorityTown(List<int> lineup)

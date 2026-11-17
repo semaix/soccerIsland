@@ -36,6 +36,8 @@ namespace SoccerIsland.Career
         public Town homeTown = Town.Furugane;
         /// <summary>年齢。1年ごとに上がる。</summary>
         public int age = 26;
+        /// <summary>今の時間帯（TimeOfDay）。</summary>
+        public int timeOfDay;
         /// <summary>人生何周目か（本人は気づいていない）。</summary>
         public int cycle = 1;
         /// <summary>前世の記憶で「なぜか知っている」島民（化ける選手）。</summary>

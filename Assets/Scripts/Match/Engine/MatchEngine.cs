@@ -137,6 +137,7 @@ namespace SoccerIsland.Match
             }
             ApplyBossTraits();
             ApplyTownRivalry();
+            foreach (var t in new[] { Home, Away }) ApplyVeteransAndMentors(t);
             Emit(MatchEventType.Info, Side.Home, null, null, $"{setup.title}　{setup.home.name} vs {setup.away.name}　観客{setup.crowd}人");
             foreach (var m in setup.missions) m.OnStart(this);
             Kickoff(Side.Home);
@@ -1118,7 +1119,7 @@ namespace SoccerIsland.Match
             foreach (var p in defTeam.Active)
             {
                 if (p.position != Position.DF) continue;
-                line += (p.stats.defense * 0.4f + p.stats.mental * 0.6f) * Perf(p);
+                line += (p.stats.defense * 0.4f + p.stats.mental * 0.6f) * Perf(p) + (p.age >= 30 ? 4f : 0f); // ベテランはラインの上げ下げがうまい
                 n++;
             }
             if (n == 0) line = 30f; else line /= n;
@@ -1593,6 +1594,45 @@ namespace SoccerIsland.Match
                     Emit(MatchEventType.Info, t.side, null, null, $"{t.name}……まるで歯が立たない気配がする。何か弱点はないのか？", 0f, true, null, null);
                 }
             }
+        }
+
+        /// <summary>
+        /// ベテランと若手、師弟。
+        /// ・大観衆（1000人以上）の前では若手（20歳以下）がのまれるが、ベテラン（33歳以上）がいると落ち着く
+        /// ・師匠と弟子が同じチームにいると、どちらも燃える
+        /// </summary>
+        void ApplyVeteransAndMentors(MatchTeam t)
+        {
+            var young = new List<MatchPlayer>();
+            MatchPlayer veteran = null;
+            foreach (var p in t.Active)
+            {
+                if (p.IsYoung) young.Add(p);
+                if (p.IsVeteran && (veteran == null || p.age > veteran.age)) veteran = p;
+            }
+            if (Setup.crowd >= 1000 && young.Count > 0)
+            {
+                if (veteran != null)
+                {
+                    foreach (var y in young) y.tension = Math.Min(100f, y.tension + 5f);
+                    t.mood = Math.Min(100f, t.mood + 5f);
+                    Emit(MatchEventType.Info, t.side, veteran, null, $"{veteran.name}「落ち着いていけ。いつも通りやればいい」　ベテランの一言で若手の顔つきが変わった。", 0f, true, null, "落ち着いていけ。");
+                }
+                else
+                {
+                    foreach (var y in young) y.tension = Math.Max(0f, y.tension - 12f);
+                    Emit(MatchEventType.Info, t.side, null, null, $"{t.name}の若手が大観衆にのまれている……");
+                }
+            }
+            foreach (var p in t.Active)
+                foreach (var mid in p.mentorIds)
+                {
+                    var mentor = t.players.Find(x => x.npcId == mid && x.CanPlay);
+                    if (mentor == null) continue;
+                    p.tension = Math.Min(100f, p.tension + 10f);
+                    mentor.tension = Math.Min(100f, mentor.tension + 5f);
+                    Emit(MatchEventType.Info, t.side, p, mentor, $"師匠の{mentor.name}と弟子の{p.name}が同じピッチに！ {p.name}の目が燃えている。", 0f, true, null, null);
+                }
         }
 
         /// <summary>地域対抗：ライバルの街との試合は燃える。</summary>

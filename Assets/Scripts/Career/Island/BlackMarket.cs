@@ -38,8 +38,13 @@ namespace SoccerIsland.Career
 
         public bool KnowsLocation => _state.knownBlackMarketPeriod == Period;
 
-        /// <summary>入れるか（裏市場の存在を知っていて、今の場所も知っている）。</summary>
-        public bool CanEnter => _player.blackMarketAccess && KnowsLocation;
+        /// <summary>true にすると深夜しか開かない（時間帯の仕組みを使う場合）。</summary>
+        public bool nightOnly;
+
+        public bool OpenNow => !nightOnly || _player.timeOfDay == (int)TimeOfDay.Night;
+
+        /// <summary>入れるか（裏市場の存在を知っていて、今の場所も知っていて、開いている）。</summary>
+        public bool CanEnter => _player.blackMarketAccess && KnowsLocation && OpenNow;
 
         public void LearnLocation() => _state.knownBlackMarketPeriod = Period;
 

@@ -13,6 +13,7 @@ namespace SoccerIsland.World
         public List<Match> matches = new List<Match>();
         public List<ShopItem> items = new List<ShopItem>();
         public List<PurchaseRecord> purchases = new List<PurchaseRecord>();
+        public LeagueState league = new LeagueState();
 
         public Match GetMatch(int id)
         {

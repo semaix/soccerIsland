@@ -103,6 +103,11 @@ namespace SoccerIsland.Match
         public Personality personality;
         public SoccerPersonality soccerPersonality;
         public List<SpecialMove> specials = new List<SpecialMove>();
+        public int age = 25;
+        /// <summary>この選手の師匠（NPC ID）。同じチームにいると燃える。</summary>
+        public List<int> mentorIds = new List<int>();
+        public bool IsVeteran => age >= 33;
+        public bool IsYoung => age <= 20;
         /// <summary>この試合で稼いだ経験値（主人公のみ使う）。</summary>
         public int exp;
 
